@@ -1,9 +1,12 @@
+CC := g++
+
+RECYCLR_FILES := $(wildcard *.cpp)
+RECYCLR_OBJS  := $(RECYCLR_FILES:%.cpp=%.o)
+
+build: $(RECYCLR_OBJS)
+
+%.o: %.cpp %.h
+	$(CC) $< -o $(basename $@)
 
 clean:
 	rm -rf *.o
-
-build: recyclr-client.o
-
-recyclr-client.o: recyclr-client.cpp recyclr-client.h
-	g++ -o recyclr recyclr-client.cpp
-
