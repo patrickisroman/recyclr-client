@@ -13,12 +13,70 @@
 
 RecyclrClient::RecyclrClient() :
     client_version_major(CLIENT_VERSION_MAJOR),
-    client_version_minor(CLIENT_VERSION_MINOR)
+    client_version_minor(CLIENT_VERSION_MINOR),
+    num_cores(0),
+    vertical_fd(-1),
+    horizontal_fd(-1),
+    client_ip()
 {
 }
 
 RecyclrClient::~RecyclrClient()
 {
+    if (horizontal_fd != -1) {
+        if (close(horizontal_fd)) {
+            cout << "ERROR: Unable to close horizontal file descriptor: " << horizontal_fd << "\n";
+            // TODO: Throw once we build out exceptions
+        }
+    }
+
+    if (vertical_fd != -1) {
+        if (close(vertical_fd)) {
+            cout << "ERROR: Unable to close vertical file descriptor: " << vertical_fd << "\n";
+            // TODO: Throw once we build out exceptions
+        }
+    }
+}
+
+u32 RecyclrClient::setup_client(bool verbose /*=false*/)
+{
+    if (verbose) {
+        cout << "Setting up Client\n";
+    }
+
+    if (!client_version_major) {
+        return -1;
+    }
+
+    if (verbose) {
+        cout << "Client Version: " << get_client_version_str() << "\n";
+    }
+
+    // Load client address
+    if (!client_ip.s_addr) {
+        load_ipv4_address(&client_ip);
+
+        if (!client_ip.s_addr) {
+            return -1;
+        }
+    }
+
+    if (verbose) {
+        cout << "Client Local IPv4: " << get_local_ip_address() << "\n";
+    }
+
+    // Load architecture data
+    num_cores = std::thread::hardware_concurrency();
+
+    if (!num_cores) {
+        return -1;
+    }
+
+    if (verbose) {
+        cout << "Num cores: " << num_cores << "\n";
+    }
+
+    return 0;
 }
 
 u32 RecyclrClient::load_ipv4_address(struct in_addr* ipv4_addr)
@@ -28,8 +86,7 @@ u32 RecyclrClient::load_ipv4_address(struct in_addr* ipv4_addr)
     }
 
     char host_address[1<<8];
-    int  hostname = gethostname(host_address, sizeof(host_address));
-    if (hostname) {
+    if (gethostname(host_address, sizeof(host_address))) {
         return EINVAL;
     }
 
@@ -38,7 +95,7 @@ u32 RecyclrClient::load_ipv4_address(struct in_addr* ipv4_addr)
         return EINVAL;
     }
 
-    ipv4_addr = (struct in_addr*) host_entry->h_addr_list[0];
+    *ipv4_addr = *((struct in_addr*) host_entry->h_addr_list[0]);
     return 0;
 }
 
@@ -62,16 +119,7 @@ std::string RecyclrClient::get_client_version_str()
 }
 
 int main() {
-    cout << "Starting Recyclr Client\n";
-    
     RecyclrClient client;
-    cout << "Client version: " << client.get_client_version_str() << "\n";
-
-    unsigned int num_cores = std::thread::hardware_concurrency();
-    cout << "CPU Cores: " << num_cores << "\n";
-
-    std::string local_ip_address = client.get_local_ip_address(); 
-    cout << "Local Machine IP: " << local_ip_address << "\n";
-
+    client.setup_client(true);
     return 0;
 }
