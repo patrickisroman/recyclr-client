@@ -25,14 +25,16 @@ RecyclrClient::~RecyclrClient()
 {
     if (horizontal_fd != -1) {
         if (::close(horizontal_fd)) {
-            cout << "ERROR: Unable to close horizontal file descriptor: " << horizontal_fd << "\n";
+            int err = errno;
+	    cout << "ERROR: Unable to close horizontal file descriptor: " << horizontal_fd << " | err: " << err << "\n";
             // TODO: Throw once we build out exceptions
         }
     }
 
     if (vertical_fd != -1) {
         if (::close(vertical_fd)) {
-            cout << "ERROR: Unable to close vertical file descriptor: " << vertical_fd << "\n";
+	    int err = errno;
+            cout << "ERROR: Unable to close vertical file descriptor: " << vertical_fd << " | err: " << err << "\n";
             // TODO: Throw once we build out exceptions
         }
     }
