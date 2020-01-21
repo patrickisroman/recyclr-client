@@ -8,8 +8,11 @@
 #include "recyclr-client.h"
 #include "recyclr-commands.h"
 
-#define cout std::cout
-#define new_ln cout << "\n"
+template<typename ...ArgType>
+void log(ArgType && ...args) {
+    (std::cout << ... << args);
+    (std::cout << "\n");
+}
 
 RecyclrClient::RecyclrClient() :
     client_version_major(CLIENT_VERSION_MAJOR),
@@ -26,15 +29,15 @@ RecyclrClient::~RecyclrClient()
     if (horizontal_fd != -1) {
         if (::close(horizontal_fd)) {
             int err = errno;
-	    cout << "ERROR: Unable to close horizontal file descriptor: " << horizontal_fd << " | err: " << err << "\n";
+            log("ERROR: Unable to close horizontal file descriptor: ", horizontal_fd, " | errno: ", err);
             // TODO: Throw once we build out exceptions
         }
     }
 
     if (vertical_fd != -1) {
         if (::close(vertical_fd)) {
-	    int err = errno;
-            cout << "ERROR: Unable to close vertical file descriptor: " << vertical_fd << " | err: " << err << "\n";
+	        int err = errno;
+            log("ERROR: Unable to close vertical file descriptor: ", vertical_fd, " | errno: ", err);
             // TODO: Throw once we build out exceptions
         }
     }
@@ -43,7 +46,7 @@ RecyclrClient::~RecyclrClient()
 u32 RecyclrClient::setup_client(bool verbose /*=false*/)
 {
     if (verbose) {
-        cout << "Setting up Client\n";
+        log("Setting up Client");
     }
 
     if (!client_version_major) {
@@ -51,7 +54,7 @@ u32 RecyclrClient::setup_client(bool verbose /*=false*/)
     }
 
     if (verbose) {
-        cout << "Client Version: " << get_client_version_str() << "\n";
+        log("Client Version: ", get_client_version_str());
     }
 
     // Load client address
@@ -64,7 +67,7 @@ u32 RecyclrClient::setup_client(bool verbose /*=false*/)
     }
 
     if (verbose) {
-        cout << "Client Local IPv4: " << get_local_ip_address() << "\n";
+        log("Client Local IPv4: ", get_local_ip_address());
     }
 
     // Load architecture data
@@ -75,7 +78,7 @@ u32 RecyclrClient::setup_client(bool verbose /*=false*/)
     }
 
     if (verbose) {
-        cout << "Num cores: " << num_cores << "\n";
+        log("Num cores: ", num_cores);
     }
 
     return 0;
