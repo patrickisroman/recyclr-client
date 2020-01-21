@@ -1,4 +1,4 @@
-#include "recyclr-types.h"
+#include "recyclr-utils.h"
 
 #include <thread>
 #include <string>
@@ -12,6 +12,8 @@ class VerticalNetClient
     std::thread* _thr;
     int          _fd;
     bool         _running;
+
+    u32 (VerticalNetClient::*_state_fn)();
 
     u32 handshake();
     u32 listen();

@@ -1,4 +1,5 @@
 #include "recyclr-types.h"
+#include "recyclr-net.h"
 
 #include <string>
 #include <netinet/in.h>
@@ -16,6 +17,8 @@ class RecyclrClient {
         int vertical_fd;
         int horizontal_fd;
         struct in_addr client_ip;
+
+        VerticalNetClient* v_client;
 
     public:
         RecyclrClient();

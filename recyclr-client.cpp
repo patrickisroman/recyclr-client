@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include <iostream>
 #include <thread>
 #include <unistd.h>
 #include <netdb.h>
@@ -7,13 +5,6 @@
 
 #include "recyclr-client.h"
 #include "recyclr-commands.h"
-#include "recyclr-net.h"
-
-template<typename ...ArgType>
-void log(ArgType && ...args) {
-    (std::cout << ... << args);
-    (std::cout << "\n");
-}
 
 RecyclrClient::RecyclrClient() :
     client_version_major(CLIENT_VERSION_MAJOR),
@@ -23,11 +14,13 @@ RecyclrClient::RecyclrClient() :
     horizontal_fd(-1),
     client_ip()
 {
-    VerticalNetClient v_client;
+    v_client = new VerticalNetClient();
 }
 
 RecyclrClient::~RecyclrClient()
 {
+    delete v_client;
+
     if (horizontal_fd != -1) {
         if (::close(horizontal_fd)) {
             int err = errno;
@@ -38,7 +31,7 @@ RecyclrClient::~RecyclrClient()
 
     if (vertical_fd != -1) {
         if (::close(vertical_fd)) {
-	        int err = errno;
+            int err = errno;
             log("ERROR: Unable to close vertical file descriptor: ", vertical_fd, " | errno: ", err);
             // TODO: Throw once we build out exceptions
         }
