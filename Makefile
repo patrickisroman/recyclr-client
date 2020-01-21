@@ -1,10 +1,10 @@
 CC     := g++
-CFLAGS := -std=gnu++17
+CFLAGS := -std=gnu++17 -pthread
 
 RECYCLR_FILES := $(wildcard *.cpp)
 RECYCLR_OBJS  := $(RECYCLR_FILES:%.cpp=%.o)
 
-build: recyclr-client.o $(RECYCLR_OBJS)
+build: recyclr-net.o recyclr-client.o
 	$(CC) $(CFLAGS) -o recyclr recyclr-client.o
 
 %.o: %.cpp %.h

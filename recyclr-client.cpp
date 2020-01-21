@@ -23,6 +23,7 @@ RecyclrClient::RecyclrClient() :
     horizontal_fd(-1),
     client_ip()
 {
+    VerticalNetClient v_client;
 }
 
 RecyclrClient::~RecyclrClient()
