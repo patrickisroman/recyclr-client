@@ -18,7 +18,8 @@ class RecyclrClient {
         int horizontal_fd;
         struct in_addr client_ip;
 
-        VerticalNetClient* v_client;
+        VerticalNetClient*   v_client;
+        HorizontalNetClient* h_client;
 
     public:
         RecyclrClient();

@@ -15,11 +15,20 @@ RecyclrClient::RecyclrClient() :
     client_ip()
 {
     v_client = new VerticalNetClient();
+    h_client = new HorizontalNetClient();
 }
 
 RecyclrClient::~RecyclrClient()
 {
-    delete v_client;
+    if (v_client) {
+        delete v_client;
+        v_client = NULL;
+    }
+
+    if (h_client) {
+        delete h_client;
+        h_client = NULL;
+    }
 
     if (horizontal_fd != -1) {
         if (::close(horizontal_fd)) {
