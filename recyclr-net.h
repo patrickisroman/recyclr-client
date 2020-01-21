@@ -3,37 +3,32 @@
 #include <thread>
 #include <string>
 
-#define BASE_SYNC_PORT  5440
+#define BASE_SYNC_PORT   5440
 #define CLIENT_SYNC_PORT 5441
 
-struct client_config {
-    client_config() :
-        client_ip_address(""),
-        server_ip_address(""),
-        port(0)
-        {}
-    
-    std::string client_ip_address;
-    std::string server_ip_address;
-    u64 port;
-};
-
-struct channel_ctl {
-    void (*start_channel)();
-    void (*run_channel)();
-    void (*close_channel)();
-};
-
-class NetworkManager
+class NetClient
 {
-    private:
-    channel_ctl ctl;
-    client_config config;
-    std::thread *thr;
+    protected:
+    u32  handshake();
+    u32  listen();
+    u32  disconnect();
 
     public:
-    NetworkManager() {};
-    ~NetworkManager() {};
+    NetClient() {};
+    ~NetClient() {};
+};
 
-    void talk();
+class VerticalNetClient : public NetClient
+{
+    protected:
+    std::thread* _thr;
+    int          _fd;
+
+    u32 handshake();
+    u32 listen();
+    u32 disconnect();
+
+    public:
+    VerticalNetClient();
+    ~VerticalNetClient();
 };
