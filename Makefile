@@ -1,15 +1,28 @@
-CC     := g++
-CFLAGS := -std=gnu++17 -pthread
+CXX     := g++
+CC      := gcc
+LD      := g++
+CFLAGS  := -std=gnu++17 -pthread
+LDFLAGS := $(CFLAGS)
 
-RECYCLR_FILES := $(wildcard *.cpp)
-RECYCLR_OBJS  := $(RECYCLR_FILES:%.cpp=%.o)
+RM      := rm
 
-build: recyclr-net.o recyclr-client.o
-	$(CC) $(CFLAGS) -o recyclr recyclr-client.o
+RECYCLR_SRCS  := $(wildcard *.cpp)
+RECYCLR_OBJS  := $(RECYCLR_SRCS:%.cpp=%.o)
+RECYCLR_EXEC  := recyclr
+RECYCLR_FILES := $(RECYCLR_OBJS) $(RECYCLR_EXEC)
 
-%.o: %.cpp %.h
-	$(CC) $(CFLAGS) $< -c -o $@
+.PHONY: clean all
+
+default: $(RECYCLR_EXEC)
+all: $(RECYCLR_SRCS) $(RECYCLR_EXEC)
+
+$(RECYCLR_EXEC): $(RECYCLR_OBJS)
+	@echo "(L) $@"
+	@$(LD) $(LDFLAGS) $(RECYCLR_OBJS) -o $@
+
+%.o: %.cpp
+	@echo "(C) $@"
+	@$(CXX) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf *.o
-	rm recyclr
+	$(RM) -rf $(RECYCLR_FILES)
