@@ -4,6 +4,62 @@
 #include <sched.h>
 #include <algorithm>
 
+//////////////// NetworkBlob //////////////////
+
+NetworkBlob::NetworkBlob() :
+    _header(),
+    _blob_buffer(),
+    _payload_buffer()
+{
+}
+
+local_buffer* NetworkBlob::to_buffer()
+{
+    size_t blob_buffer_size = sizeof(NetworkBlobHeader) + _payload_buffer.len;
+
+    // We have an allocated buffer, but it's the wrong size. Deallocate.
+    if (_blob_buffer.buffer && _blob_buffer.len != blob_buffer_size) {
+        free(_blob_buffer.buffer);
+        _blob_buffer = {nullptr, 0};
+    }
+
+    // We don't have a blob buffer. Allocate.
+    if (!_blob_buffer.buffer) {
+        _blob_buffer.buffer = malloc(blob_buffer_size);
+
+        if (!_blob_buffer.buffer) {
+            _blob_buffer.len = 0;
+            log("ERROR: Unable to allocate blob message buffer");
+            return nullptr;
+        }
+    }
+
+    unsigned char* byte_buffer = reinterpret_cast<unsigned char*>(_blob_buffer.buffer);
+
+    // Copy header
+    *(reinterpret_cast<NetworkBlobHeader*>(byte_buffer)) = _header;
+    byte_buffer += sizeof(NetworkBlobHeader);
+
+    // Copy payload
+    memcpy(byte_buffer, reinterpret_cast<unsigned char*>(_payload_buffer.buffer), _payload_buffer.len);
+    return &_blob_buffer;
+}
+
+NetworkBlob::~NetworkBlob()
+{
+    // clean up the payload buffer
+    if (_payload_buffer.buffer) {
+        free(_payload_buffer.buffer);
+        _payload_buffer = {nullptr, 0};
+    }
+
+    // clean up the blob buffer
+    if (_blob_buffer.buffer) {
+        free(_blob_buffer.buffer);
+        _blob_buffer = {nullptr, 0};
+    }
+}
+
 //////////////// VerticalNetClient ////////////////
 VerticalNetClient::VerticalNetClient() :
     _thr(nullptr),

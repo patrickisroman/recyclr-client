@@ -3,8 +3,56 @@
 #include <string>
 #include <vector>
 
-#define BASE_SYNC_PORT   5440
-#define CLIENT_SYNC_PORT 5441
+#define RECYCLR_NETWORK_PORT  6528
+
+#define BLOB_HEADER_LEN_BYTES 1 << 9
+
+enum BlobOperation
+{
+    OPEN_CONNECTION  = 0,
+    CLOSE_CONNECTION = 1,
+    REQUEST_CALLBACK = 2,
+    PUSH_DATA = 3,
+    RECALL = 4
+};
+
+struct blob_header {
+    BlobOperation operation;
+    u64           source_id;
+    u64           target_id;
+    u64           message_id;
+};
+
+struct local_buffer {
+    void*  buffer;
+    size_t len;
+};
+
+struct NetworkBlobHeader
+{
+    union {
+        unsigned char      buffer[BLOB_HEADER_LEN_BYTES];
+        struct blob_header header_data;
+    };
+};
+
+static_assert(sizeof(NetworkBlobHeader) == BLOB_HEADER_LEN_BYTES);
+
+class NetworkBlob
+{
+    protected:
+    NetworkBlobHeader _header;
+
+    private:
+    local_buffer _blob_buffer;
+    local_buffer _payload_buffer;
+
+    local_buffer* to_buffer();
+
+    public:
+    NetworkBlob();
+    ~NetworkBlob();
+};
 
 // TODO Make a parent template class for Client
 // ugh that's gonna be whacky function ptr logic
