@@ -47,11 +47,14 @@ class NetworkBlob
     local_buffer _blob_buffer;
     local_buffer _payload_buffer;
 
-    local_buffer* to_buffer();
-
     public:
     NetworkBlob();
     ~NetworkBlob();
+
+    local_buffer* to_buffer();
+    
+    bool set_payload(void* data, size_t len);
+    bool append_payload(void* data, size_t len);
 };
 
 // TODO Make a parent template class for Client

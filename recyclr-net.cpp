@@ -45,6 +45,50 @@ local_buffer* NetworkBlob::to_buffer()
     return &_blob_buffer;
 }
 
+bool NetworkBlob::set_payload(void* data, size_t len)
+{
+    if (!data) {
+        return false;
+    }
+
+    if (!len) {
+        return true;
+    }
+
+    void* payload_buffer_ptr;
+
+    // Payload already exists, but it's the wrong size. Reallocate
+    if (_payload_buffer.buffer && _payload_buffer.len != len) {
+        payload_buffer_ptr = malloc(len);
+        if (!payload_buffer_ptr) {
+            log("ERROR: Unable to allocate payload buffer");
+            return false;
+        }
+
+        free(_payload_buffer.buffer);
+        _payload_buffer = {payload_buffer_ptr, len};
+    }
+
+    // No payload exists. Allocate.
+    if (!_payload_buffer.buffer) {
+        payload_buffer_ptr = malloc(len);
+        if (!payload_buffer_ptr) {
+            log("ERROR: Unable to allocate payload buffer");
+            return false;
+        }
+        _payload_buffer = {payload_buffer_ptr, len};
+    }
+
+    memcpy(_payload_buffer.buffer, data, len);
+
+    return true;
+}
+
+bool NetworkBlob::append_payload(void* data, size_t len)
+{
+    return false;
+}
+
 NetworkBlob::~NetworkBlob()
 {
     // clean up the payload buffer
