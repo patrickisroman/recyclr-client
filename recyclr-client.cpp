@@ -128,6 +128,10 @@ std::string RecyclrClient::get_client_version_str()
 }
 
 int main() {
+    // Pin our main thread to core 0
+    set_process_affinity(BASE_THREAD_MASK);
+
+    // Setup our network node client
     RecyclrClient client;
     client.setup_client(true);
     return 0;

@@ -1,6 +1,5 @@
 #include "recyclr-utils.h"
 
-#include <thread>
 #include <string>
 #include <vector>
 

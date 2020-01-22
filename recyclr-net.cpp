@@ -13,6 +13,11 @@ VerticalNetClient::VerticalNetClient() :
 {
     _running = true;
     _thr = new std::thread(&VerticalNetClient::run, this);
+
+    int r = set_thread_affinity(_thr, NETWORK_THREAD_MASK);
+    if (r) {
+        log("Unable to set thread affinity for vertical network thread");
+    }
 }
 
 VerticalNetClient::~VerticalNetClient()
@@ -37,7 +42,7 @@ u32 VerticalNetClient::run()
         _state_fn = &VerticalNetClient::listen;
     }
 
-    while(_state_fn) {
+    while(_state_fn && _running) {
         if ((this->*_state_fn)()) {
             break;
         }
@@ -76,6 +81,11 @@ HorizontalNetClient::HorizontalNetClient() :
 {
     _running = true;
     _thr = new std::thread(&HorizontalNetClient::run, this);
+
+    int r = set_thread_affinity(_thr, NETWORK_THREAD_MASK);
+    if (r) {
+        log("Unable to set thread affinity for horizontal network thread");
+    }
 }
 
 HorizontalNetClient::~HorizontalNetClient()
@@ -101,7 +111,7 @@ u32 HorizontalNetClient::run()
         _state_fn = &HorizontalNetClient::listen;
     }
 
-    while(_state_fn) {
+    while(_state_fn && _running) {
         if ((this->*_state_fn)()) {
             break;
         }
