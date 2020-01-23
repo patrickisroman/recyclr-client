@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sched.h>
 #include <algorithm>
+#include <string.h>
 
 //////////////// NetworkBlob //////////////////
 
@@ -13,7 +14,31 @@ NetworkBlob::NetworkBlob() :
 {
 }
 
-local_buffer* NetworkBlob::to_buffer()
+local_buffer* NetworkBlob::from_buffer(void* buffer, size_t len)
+{
+    if (!buffer) {
+        return &_blob_buffer;
+    }
+
+    if (len != _blob_buffer.len) {
+        void* ptr = malloc(len);
+        if (!ptr) {
+            log("ERROR: Unable to realloc buffer to load blob from buffer");
+            return nullptr;
+        }
+
+        if (_blob_buffer.buffer) {
+            free(_blob_buffer.buffer);
+        }
+
+        _blob_buffer = {ptr, len};
+    }
+
+    memcpy(_blob_buffer.buffer, buffer, len);
+    return &_blob_buffer;
+}
+
+local_buffer* NetworkBlob::load_buffer()
 {
     size_t blob_buffer_size = sizeof(NetworkBlobHeader) + _payload_buffer.len;
 
@@ -34,14 +59,14 @@ local_buffer* NetworkBlob::to_buffer()
         }
     }
 
-    unsigned char* byte_buffer = reinterpret_cast<unsigned char*>(_blob_buffer.buffer);
+    char* blob_buffer_ptr = reinterpret_cast<char*>(_blob_buffer.buffer);
 
     // Copy header
-    *(reinterpret_cast<NetworkBlobHeader*>(byte_buffer)) = _header;
-    byte_buffer += sizeof(NetworkBlobHeader);
+    *(reinterpret_cast<NetworkBlobHeader*>(blob_buffer_ptr)) = _header;
+    blob_buffer_ptr += sizeof(NetworkBlobHeader);
 
     // Copy payload
-    memcpy(byte_buffer, reinterpret_cast<unsigned char*>(_payload_buffer.buffer), _payload_buffer.len);
+    memcpy(blob_buffer_ptr, _payload_buffer.buffer, _payload_buffer.len);
     return &_blob_buffer;
 }
 
@@ -55,11 +80,9 @@ bool NetworkBlob::set_payload(void* data, size_t len)
         return true;
     }
 
-    void* payload_buffer_ptr;
-
     // Payload already exists, but it's the wrong size. Reallocate
     if (_payload_buffer.buffer && _payload_buffer.len != len) {
-        payload_buffer_ptr = malloc(len);
+        void* payload_buffer_ptr = malloc(len);
         if (!payload_buffer_ptr) {
             log("ERROR: Unable to allocate payload buffer");
             return false;
@@ -71,7 +94,7 @@ bool NetworkBlob::set_payload(void* data, size_t len)
 
     // No payload exists. Allocate.
     if (!_payload_buffer.buffer) {
-        payload_buffer_ptr = malloc(len);
+        void* payload_buffer_ptr = malloc(len);
         if (!payload_buffer_ptr) {
             log("ERROR: Unable to allocate payload buffer");
             return false;
@@ -86,7 +109,29 @@ bool NetworkBlob::set_payload(void* data, size_t len)
 
 bool NetworkBlob::append_payload(void* data, size_t len)
 {
-    return false;
+    if (!data) {
+        return false;
+    }
+
+    if (!len) {
+        return true;
+    }
+
+    if (!_payload_buffer.buffer) {
+        return set_payload(data, len);
+    }
+
+    void* payload_copy_buffer = malloc(_payload_buffer.len + len);
+    char* payload_copy_ptr = reinterpret_cast<char*>(payload_copy_buffer);
+
+    memcpy(payload_copy_ptr, _payload_buffer.buffer, _payload_buffer.len);
+    memcpy(payload_copy_ptr + _payload_buffer.len, data, len);
+
+    // This is NOT thread safe; thus why we must pin Networking to a single core
+    free(_payload_buffer.buffer);
+    _payload_buffer.buffer = payload_copy_ptr;
+
+    return true;
 }
 
 NetworkBlob::~NetworkBlob()

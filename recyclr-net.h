@@ -51,7 +51,8 @@ class NetworkBlob
     NetworkBlob();
     ~NetworkBlob();
 
-    local_buffer* to_buffer();
+    local_buffer* from_buffer(void* buffer, size_t len);
+    local_buffer* load_buffer();
     
     bool set_payload(void* data, size_t len);
     bool append_payload(void* data, size_t len);
