@@ -158,6 +158,7 @@ VerticalNetClient::VerticalNetClient() :
     _socket_fd(-1),
     _epoll_fd(-1),
     _running(false),
+    _buffer_stack(),
     _state_fn(nullptr)
 {
     _running = true;
@@ -224,7 +225,7 @@ u32 VerticalNetClient::listen()
 
     struct epoll_event listening_socket_event;
     listening_socket_event.data.fd = _socket_fd;
-    listening_socket_event.events = EPOLLIN;
+    listening_socket_event.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLET;
     r = epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, _socket_fd, &listening_socket_event);
     if (r < 0) {
         err("Unable to register epoll events on listening socket");
@@ -272,7 +273,7 @@ u32 VerticalNetClient::handle_socket()
 
                 struct epoll_event event;
                 event.data.fd = conn_fd;
-                event.events = EPOLLIN | EPOLLOUT | EPOLLPRI;
+                event.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLET;
                 r = epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, conn_fd, &event);
                 if (r < 0) {
                     err("Unable to add new connection to epoll listener");
@@ -283,7 +284,7 @@ u32 VerticalNetClient::handle_socket()
                 log("Accepted a connection on fd ", conn_fd);
             }
         } else {
-            handle_epoll_event(fd_event);
+            handle_epoll_event(fd_event, _buffer_stack);
         }
     }
     return 0;
@@ -299,6 +300,7 @@ HorizontalNetClient::HorizontalNetClient() :
     _thr(nullptr),
     _fds(),
     _running(false),
+    _buffer_stack(),
     _state_fn(nullptr)
 {
     _running = true;
@@ -415,11 +417,30 @@ int set_socket_flags(int socket_fd, int flags)
     return fcntl(socket_fd, F_SETFL, socket_flags | O_NONBLOCK);
 }
 
-int handle_epoll_event(struct epoll_event& event)
+int handle_epoll_event(struct epoll_event& event, std::vector<char*>& buffer_stack)
 {
     if (event.events & EPOLLIN) {
-        // we have data to read!
+        size_t read_length = 0;
+        char big_buffer[1 << 20];
+
+        int r = 0;
+        while ((r = recv(event.data.fd, big_buffer + read_length, sizeof(big_buffer) - read_length, 0)) > 0) {
+            read_length += r;
+        }
+
+        if (!read_length) {
+            return 0;
+        }
+
+        char* stack_buffer = (char*) malloc(read_length);
+        if (!stack_buffer) {
+            err("Unable to allocate byte buffer");
+            return -1;
+        }
+
+        memcpy(stack_buffer, big_buffer, read_length);
+        buffer_stack.push_back(stack_buffer);
     }
 
-    return -1;
+    return 0;
 }

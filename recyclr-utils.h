@@ -18,9 +18,14 @@ enum thread_mask {
     CONTROLLER_THREAD_MASK = 0x3
 };
 
+// Time functions
+u64 micros();
+u64 millis();
+
 template<typename ...ArgType>
 void log(ArgType && ...args)
 {
+    (std::cout << "[" << micros() << "] [" << sched_getcpu() << "] ");
     (std::cout << ... << args);
     (std::cout << "\n");
 }
@@ -28,8 +33,10 @@ void log(ArgType && ...args)
 template<typename ...ArgType>
 void err(ArgType && ...args)
 {
-    (std::cout << "[ERROR] " << ... << args);
-    (std::cout << "\n");
+    (std::cout << "[" << micros() << "] " << sched_getcpu() << "] ");
+    std::cout << "[ERROR]";
+    (std::cout << ... << args);
+    std::cout << "\n";
 }
 
 #define ATOMIC_ADD(ptr, val) \
@@ -40,10 +47,6 @@ void err(ArgType && ...args)
 
 #define ATOMIC_CAS(ptr, old_val, new_val) \
     __sync_bool_compare_and_swap(ptr, old_val, new_val)
-
-// Time functions
-u64 micros();
-u64 millis();
 
 // Threading functions
 u32 set_thread_affinity(std::thread* thr, thread_mask affinity);

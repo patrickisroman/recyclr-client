@@ -134,5 +134,8 @@ int main() {
     // Setup our network node client
     RecyclrClient client;
     client.setup_client(true);
+
+    while (1) {}
+
     return 0;
 }

@@ -9,7 +9,7 @@
 #define RECYCLR_BACKLOG         32
 #define RECYCLR_MAX_FDS         16 * 1024
 
-#define BLOB_HEADER_LEN_BYTES 1 << 9
+#define BLOB_HEADER_LEN_BYTES 1 << 6
 
 enum BlobOperation
 {
@@ -21,7 +21,7 @@ enum BlobOperation
 };
 
 struct blob_header {
-    BlobOperation operation;
+    u64           message_length_bytes;
     u64           source_id;
     u64           target_id;
     u64           message_id;
@@ -76,6 +76,8 @@ class VerticalNetClient
 
     u32 (VerticalNetClient::*_state_fn)();
 
+    std::vector<char*> _buffer_stack;
+
     public:
     VerticalNetClient();
     ~VerticalNetClient();
@@ -96,6 +98,8 @@ class HorizontalNetClient
 
     u32 (HorizontalNetClient::*_state_fn)();
 
+    std::vector<char*> _buffer_stack;
+
     public:
     HorizontalNetClient();
     ~HorizontalNetClient();
@@ -109,4 +113,4 @@ class HorizontalNetClient
 int setup_listening_socket();
 int accept_connection(int socket);
 int set_socket_flags(int socket_fd, int flags);
-int handle_epoll_event(struct epoll_event& event);
+int handle_epoll_event(struct epoll_event& event, std::vector<char*>& buffer_stack);
