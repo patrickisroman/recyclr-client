@@ -2,8 +2,12 @@
 
 #include <string>
 #include <vector>
+#include <sys/epoll.h>
 
-#define RECYCLR_NETWORK_PORT  6528
+#define RECYCLR_NETWORK_PORT    6528
+#define RECYCLR_MAX_CONNECTIONS 300
+#define RECYCLR_BACKLOG         32
+#define RECYCLR_MAX_FDS         16 * 1024
 
 #define BLOB_HEADER_LEN_BYTES 1 << 9
 
@@ -64,9 +68,11 @@ class NetworkBlob
 class VerticalNetClient
 {
     protected:
-    std::thread* _thr;
-    int          _fd;
-    bool         _running;
+    std::thread*        _thr;
+    int                 _socket_fd;
+    int                 _epoll_fd;
+    struct epoll_event* _epoll_events;
+    bool                _running;
 
     u32 (VerticalNetClient::*_state_fn)();
 
@@ -75,10 +81,10 @@ class VerticalNetClient
     ~VerticalNetClient();
 
 
-    u32 listen();
-    u32 handshake();
-    u32 disconnect();
     u32 run();
+    u32 listen();
+    u32 handle_socket();
+    u32 close();
 };
 
 class HorizontalNetClient
@@ -99,3 +105,8 @@ class HorizontalNetClient
     u32 disconnect();
     u32 run();
 };
+
+int setup_listening_socket();
+int accept_connection(int socket);
+int set_socket_flags(int socket_fd, int flags);
+int handle_epoll_event(struct epoll_event& event);

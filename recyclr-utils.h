@@ -25,6 +25,13 @@ void log(ArgType && ...args)
     (std::cout << "\n");
 }
 
+template<typename ...ArgType>
+void err(ArgType && ...args)
+{
+    (std::cout << "[ERROR] " << ... << args);
+    (std::cout << "\n");
+}
+
 #define ATOMIC_ADD(ptr, val) \
     __sync_add_and_fetch(ptr, val)
 
