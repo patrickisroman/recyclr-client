@@ -20,7 +20,7 @@ $(RECYCLR_EXEC): $(RECYCLR_OBJS)
 	@echo "(L) $@"
 	@$(LD) $(LDFLAGS) $(RECYCLR_OBJS) -o $@
 
-%.o: %.cpp
+%.o: %.cpp %.h
 	@echo "(C) $@"
 	@$(CXX) $(CFLAGS) -c $< -o $@
 

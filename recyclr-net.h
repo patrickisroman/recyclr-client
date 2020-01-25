@@ -3,28 +3,35 @@
 #include <string>
 #include <vector>
 #include <sys/epoll.h>
+#include <deque>
 
 #define RECYCLR_NETWORK_PORT    6528
 #define RECYCLR_MAX_CONNECTIONS 300
 #define RECYCLR_BACKLOG         32
 #define RECYCLR_MAX_FDS         16 * 1024
+#define BLOB_HEADER_LEN_BYTES   1 << 6
 
-#define BLOB_HEADER_LEN_BYTES 1 << 6
+using namespace std;
+using buffer_queue = deque<pair<char*, size_t>>;
 
-enum BlobOperation
+enum BlobOpCode
 {
-    OPEN_CONNECTION  = 0,
-    CLOSE_CONNECTION = 1,
-    REQUEST_CALLBACK = 2,
-    PUSH_DATA = 3,
-    RECALL = 4
+    OP_CODE_OPEN_CONNECTION  = 0,
+    OP_CODE_CLOSE_CONNECTION = 1,
+    OP_CODE_REQUEST_CALLBACK = 2,
+    OP_CODE_PUSH_DATA = 3,
+    OP_CODE_RECALL = 4
 };
 
+#define BLOB_MAGIC 0x83702020
+
 struct blob_header {
-    u64           message_length_bytes;
-    u64           source_id;
-    u64           target_id;
-    u64           message_id;
+    BlobOpCode op_code; 
+    u32        magic;
+    u64        message_length_bytes;
+    u64        source_id;
+    u64        target_id;
+    u64        message_id;
 };
 
 struct local_buffer {
@@ -65,52 +72,33 @@ class NetworkBlob
 // TODO Make a parent template class for Client
 // ugh that's gonna be whacky function ptr logic
 
-class VerticalNetClient
+class NetClient
 {
     protected:
-    std::thread*        _thr;
+    thread*             _thr;
     int                 _socket_fd;
     int                 _epoll_fd;
     struct epoll_event* _epoll_events;
     bool                _running;
+    buffer_queue        _buffer_queue;
 
-    u32 (VerticalNetClient::*_state_fn)();
-
-    std::vector<char*> _buffer_stack;
+    u32 (NetClient::*_state_fn)();
 
     public:
-    VerticalNetClient();
-    ~VerticalNetClient();
-
+    NetClient();
+    ~NetClient();
 
     u32 run();
     u32 listen();
     u32 handle_socket();
+    u32 process_blobs();
     u32 close();
-};
 
-class HorizontalNetClient
-{
-    protected:
-    std::thread*     _thr;
-    std::vector<int> _fds;
-    bool             _running;
-
-    u32 (HorizontalNetClient::*_state_fn)();
-
-    std::vector<char*> _buffer_stack;
-
-    public:
-    HorizontalNetClient();
-    ~HorizontalNetClient();
-
-    u32 listen();
-    u32 handshake();
-    u32 disconnect();
-    u32 run();
+    bool pop_message(local_buffer* buffer);
+    void stop();
 };
 
 int setup_listening_socket();
 int accept_connection(int socket);
 int set_socket_flags(int socket_fd, int flags);
-int handle_epoll_event(struct epoll_event& event, std::vector<char*>& buffer_stack);
+int handle_epoll_event(struct epoll_event& event, buffer_queue& queue);

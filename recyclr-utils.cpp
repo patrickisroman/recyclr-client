@@ -1,17 +1,18 @@
 #include "recyclr-utils.h"
+#include <cstring>
 
 u64 micros()
 {
     struct timeval tp;
     gettimeofday(&tp, NULL);
-    return (tp.tv_sec * MICROS_PER_SECOND) + tp.tv_usec;
+    return (static_cast<u64>(tp.tv_sec) * MICROS_PER_SECOND) + static_cast<u64>(tp.tv_usec);
 }
 
 u64 millis()
 {
     struct timeval tp;
     gettimeofday(&tp, NULL);
-    return (tp.tv_sec * MILLIS_PER_SECOND) + (tp.tv_usec / MICROS_PER_MILLI);
+    return (static_cast<u64>(tp.tv_sec) * MILLIS_PER_SECOND) + (static_cast<u64>(tp.tv_usec) / MICROS_PER_MILLI);
 }
 
 u32 set_thread_affinity(std::thread* thr, thread_mask affinity)

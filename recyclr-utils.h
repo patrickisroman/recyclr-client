@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sys/time.h>
 #include <thread>
+#include <iomanip>
 
 #include "recyclr-types.h"
 
@@ -22,19 +23,15 @@ enum thread_mask {
 u64 micros();
 u64 millis();
 
-template<typename ...ArgType>
-void log(ArgType && ...args)
-{
-    (std::cout << "[" << micros() << "] [" << sched_getcpu() << "] ");
-    (std::cout << ... << args);
-    (std::cout << "\n");
-}
+#define LOG(...) log("[LOG] ", __LINE__, __FILE__, __VA_ARGS__)
+#define ERR(...) log("[ERROR] ", __LINE__, __FILE__, __VA_ARGS__);
 
 template<typename ...ArgType>
-void err(ArgType && ...args)
+void log(const char* prefix, int line, const char* file, ArgType && ...args)
 {
-    (std::cout << "[" << micros() << "] " << sched_getcpu() << "] ");
-    std::cout << "[ERROR]";
+    double time = ((double) micros()) / MICROS_PER_SECOND;
+    std::cout << std::fixed;
+    std::cout << "[" << time << "] [" << file << ":" << line << "] (" << sched_getcpu() << ") ";
     (std::cout << ... << args);
     std::cout << "\n";
 }
@@ -46,6 +43,9 @@ void err(ArgType && ...args)
     __sync_sub_and_fetch(ptr, val)
 
 #define ATOMIC_CAS(ptr, old_val, new_val) \
+    __sync_val_compare_and_swap(ptr, old_val, new_val)
+
+#define ATOMIC_CAS_BOOL(ptr, old_val, new_val) \
     __sync_bool_compare_and_swap(ptr, old_val, new_val)
 
 // Threading functions

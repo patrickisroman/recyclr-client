@@ -10,12 +10,9 @@ RecyclrClient::RecyclrClient() :
     client_version_major(CLIENT_VERSION_MAJOR),
     client_version_minor(CLIENT_VERSION_MINOR),
     num_cores(0),
-    vertical_fd(-1),
-    horizontal_fd(-1),
     client_ip()
 {
-    v_client = new VerticalNetClient();
-    h_client = new HorizontalNetClient();
+    v_client = new NetClient();
 }
 
 RecyclrClient::~RecyclrClient()
@@ -24,33 +21,12 @@ RecyclrClient::~RecyclrClient()
         delete v_client;
         v_client = NULL;
     }
-
-    if (h_client) {
-        delete h_client;
-        h_client = NULL;
-    }
-
-    if (horizontal_fd != -1) {
-        if (::close(horizontal_fd)) {
-            int err = errno;
-            log("ERROR: Unable to close horizontal file descriptor: ", horizontal_fd, " | errno: ", err);
-            // TODO: Throw once we build out exceptions
-        }
-    }
-
-    if (vertical_fd != -1) {
-        if (::close(vertical_fd)) {
-            int err = errno;
-            log("ERROR: Unable to close vertical file descriptor: ", vertical_fd, " | errno: ", err);
-            // TODO: Throw once we build out exceptions
-        }
-    }
 }
 
 u32 RecyclrClient::setup_client(bool verbose /*=false*/)
 {
     if (verbose) {
-        log("Setting up Client");
+        LOG("Setting up Client");
     }
 
     if (!client_version_major) {
@@ -58,7 +34,7 @@ u32 RecyclrClient::setup_client(bool verbose /*=false*/)
     }
 
     if (verbose) {
-        log("Client Version: ", get_client_version_str());
+        LOG("Client Version: ", get_client_version_str());
     }
 
     // Load client address
@@ -71,7 +47,7 @@ u32 RecyclrClient::setup_client(bool verbose /*=false*/)
     }
 
     if (verbose) {
-        log("Client Local IPv4: ", get_local_ip_address());
+        LOG("Client Local IPv4: ", get_local_ip_address());
     }
 
     // Load architecture data
@@ -82,7 +58,7 @@ u32 RecyclrClient::setup_client(bool verbose /*=false*/)
     }
 
     if (verbose) {
-        log("Num cores: ", num_cores);
+        LOG("Num cores: ", num_cores);
     }
 
     return 0;

@@ -26,7 +26,7 @@ local_buffer* NetworkBlob::from_buffer(void* buffer, size_t len)
     if (len != _blob_buffer.len) {
         void* ptr = malloc(len);
         if (!ptr) {
-            err("Unable to realloc buffer to load blob from buffer");
+            ERR("Unable to realloc buffer to load blob from buffer");
             return nullptr;
         }
 
@@ -57,7 +57,7 @@ local_buffer* NetworkBlob::load_buffer()
 
         if (!_blob_buffer.buffer) {
             _blob_buffer.len = 0;
-            err("Unable to allocate blob message buffer");
+            ERR("Unable to allocate blob message buffer");
             return nullptr;
         }
     }
@@ -87,7 +87,7 @@ bool NetworkBlob::set_payload(void* data, size_t len)
     if (_payload_buffer.buffer && _payload_buffer.len != len) {
         void* payload_buffer_ptr = malloc(len);
         if (!payload_buffer_ptr) {
-            err("Unable to allocate payload buffer");
+            ERR("Unable to allocate payload buffer");
             return false;
         }
 
@@ -99,7 +99,7 @@ bool NetworkBlob::set_payload(void* data, size_t len)
     if (!_payload_buffer.buffer) {
         void* payload_buffer_ptr = malloc(len);
         if (!payload_buffer_ptr) {
-            err("Unable to allocate payload buffer");
+            ERR("Unable to allocate payload buffer");
             return false;
         }
         _payload_buffer = {payload_buffer_ptr, len};
@@ -152,25 +152,26 @@ NetworkBlob::~NetworkBlob()
     }
 }
 
-//////////////// VerticalNetClient ////////////////
-VerticalNetClient::VerticalNetClient() :
+//////////////// NetClient ////////////////
+NetClient::NetClient() :
     _thr(nullptr),
     _socket_fd(-1),
     _epoll_fd(-1),
+    _epoll_events(),
     _running(false),
-    _buffer_stack(),
+    _buffer_queue(),
     _state_fn(nullptr)
 {
     _running = true;
-    _thr = new std::thread(&VerticalNetClient::run, this);
+    _thr = new std::thread(&NetClient::run, this);
 
     int r = set_thread_affinity(_thr, NETWORK_THREAD_MASK);
     if (r) {
-        err("Unable to set thread affinity for vertical network thread");
+        ERR("Unable to set thread affinity for vertical network thread");
     }
 }
 
-VerticalNetClient::~VerticalNetClient()
+NetClient::~NetClient()
 {
     if (_socket_fd >= 0) {
         if (::close(_socket_fd)) {
@@ -186,10 +187,10 @@ VerticalNetClient::~VerticalNetClient()
     }
 }
 
-u32 VerticalNetClient::run()
+u32 NetClient::run()
 {
     if (!_state_fn) {
-        _state_fn = &VerticalNetClient::listen;
+        _state_fn = &NetClient::listen;
     }
 
     while (_state_fn && _running) {
@@ -201,25 +202,25 @@ u32 VerticalNetClient::run()
     return 0;
 }
 
-u32 VerticalNetClient::listen()
+u32 NetClient::listen()
 {
     _socket_fd = setup_listening_socket();
     if (_socket_fd < 1) {
-        _state_fn = &VerticalNetClient::close;
+        _state_fn = &NetClient::close;
         return -1;
     }
 
     int r = set_socket_flags(_socket_fd, O_NONBLOCK);
     if (r < 0) {
-        err("Unable to set socket flags. Socket: ", _socket_fd);
-        _state_fn = &VerticalNetClient::close;
+        ERR("Unable to set socket flags. Socket: ", _socket_fd);
+        _state_fn = &NetClient::close;
         return -1;
     }
 
     _epoll_fd = epoll_create(1);
     if (_epoll_fd < 0) {
-        err("Unable to setup epoll listener");
-        _state_fn = &VerticalNetClient::close;
+        ERR("Unable to setup epoll listener");
+        _state_fn = &NetClient::close;
         return -1;
     }
 
@@ -228,30 +229,30 @@ u32 VerticalNetClient::listen()
     listening_socket_event.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLET;
     r = epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, _socket_fd, &listening_socket_event);
     if (r < 0) {
-        err("Unable to register epoll events on listening socket");
-        _state_fn = &VerticalNetClient::close;
+        ERR("Unable to register epoll events on listening socket");
+        _state_fn = &NetClient::close;
         return -1;
     }
 
     _epoll_events = (struct epoll_event*) calloc(RECYCLR_MAX_FDS, sizeof(struct epoll_event));
     if (!_epoll_events) {
-        err("Unable to allocate epoll event list");
-        _state_fn = &VerticalNetClient::close;
+        ERR("Unable to allocate epoll event list");
+        _state_fn = &NetClient::close;
         return -1;
     }
 
-    _state_fn = &VerticalNetClient::handle_socket;
+    _state_fn = &NetClient::handle_socket;
     return 0;
 }
 
-u32 VerticalNetClient::handle_socket()
+u32 NetClient::handle_socket()
 {
     int events = epoll_wait(_epoll_fd, _epoll_events, RECYCLR_MAX_FDS, 0);
     for (int i = 0; i < events; i++) {
         struct epoll_event& fd_event = _epoll_events[i];
 
         if (fd_event.events & EPOLLERR) {
-            err("ERR ON SOCKET ", fd_event.data.fd);
+            ERR("ERR ON SOCKET ", fd_event.data.fd);
         }
 
         if (fd_event.data.fd == _socket_fd) {
@@ -259,15 +260,15 @@ u32 VerticalNetClient::handle_socket()
             if (conn_fd < 0) {
                 int e = errno;
                 if (e != EWOULDBLOCK && e != EAGAIN) {
-                    err("Fatal error while accepting a new connection");
-                    _state_fn = &VerticalNetClient::close;
+                    ERR("Fatal error while accepting a new connection");
+                    _state_fn = &NetClient::close;
                     return -1;
                 }
             } else {
                 // add socket to epoll event
                 int r = set_socket_flags(_socket_fd, O_NONBLOCK);
                 if (r < 0) {
-                    _state_fn = &VerticalNetClient::close;
+                    _state_fn = &NetClient::close;
                     return -1;
                 }
 
@@ -276,107 +277,91 @@ u32 VerticalNetClient::handle_socket()
                 event.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLET;
                 r = epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, conn_fd, &event);
                 if (r < 0) {
-                    err("Unable to add new connection to epoll listener");
-                    _state_fn = &VerticalNetClient::close;
+                    ERR("Unable to add new connection to epoll listener");
+                    _state_fn = &NetClient::close;
                     return -1;
                 }
 
-                log("Accepted a connection on fd ", conn_fd);
+                LOG("Accepted a connection on fd ", conn_fd);
             }
         } else {
-            handle_epoll_event(fd_event, _buffer_stack);
+            handle_epoll_event(fd_event, _buffer_queue);
         }
     }
+    
+    if (!_buffer_queue.empty()) {
+        _state_fn = &NetClient::process_blobs;
+    }
+
     return 0;
 }
 
-u32 VerticalNetClient::close()
+u32 NetClient::process_blobs()
+{
+    for (auto it = _buffer_queue.begin(); it < _buffer_queue.end(); it++) {
+        local_buffer buf;
+        pop_message(&buf);
+    }
+
+    _state_fn = &NetClient::handle_socket;
+    return 0;
+}
+
+u32 NetClient::close()
 {
     return 1;
 }
 
-//////////////// HorizontalNetClient ////////////////
-HorizontalNetClient::HorizontalNetClient() :
-    _thr(nullptr),
-    _fds(),
-    _running(false),
-    _buffer_stack(),
-    _state_fn(nullptr)
+bool NetClient::pop_message(local_buffer* buffer)
 {
-    _running = true;
-    _thr = new std::thread(&HorizontalNetClient::run, this);
-
-    int r = set_thread_affinity(_thr, NETWORK_THREAD_MASK);
-    if (r) {
-        log("Unable to set thread affinity for horizontal network thread");
+    if (!buffer) {
+        return false;
     }
+
+    if (_buffer_queue.empty()) {
+        return false;
+    }
+
+    auto buffer_pair = _buffer_queue.front();
+    _buffer_queue.pop_front();
+
+    struct blob_header* front_blob_header = (struct blob_header*) buffer_pair.first;
+
+    if (front_blob_header->magic != BLOB_MAGIC) {
+        free(buffer_pair.first);
+        return pop_message(buffer);
+    }
+
+    buffer->buffer = buffer_pair.first;
+    buffer->len    = buffer_pair.second;
+
+    return true;
 }
 
-HorizontalNetClient::~HorizontalNetClient()
+void NetClient::stop()
 {
-    while (!_fds.empty()) {
-        int fd = _fds.back();
-        if (::close(fd)) {
-            int err = errno;
-        }
-        _fds.pop_back();
-    }
-
-    if (_thr) {
-        _running = false;
-        _thr->join();
-        _thr = nullptr;
-    }
-}
-
-u32 HorizontalNetClient::run()
-{
-    if (!_state_fn) {
-        _state_fn = &HorizontalNetClient::listen;
-    }
-
-    while (_state_fn && _running) {
-        if ((this->*_state_fn)()) {
-            break;
-        }
-    }
-
-    return 0;
-}
-
-u32 HorizontalNetClient::listen()
-{
-    sched_yield();
-
-    if (!_running) {
-        return -1;
-    }
-
-    return 0;
-}
-
-u32 HorizontalNetClient::handshake()
-{
-    return 0;
-}
-
-u32 HorizontalNetClient::disconnect()
-{
-    return 0;
+    _running = false;
 }
 
 int setup_listening_socket()
 {
     int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0) {
-        err("Unable to open socket fd");
+        ERR("Unable to open socket fd");
         return -1;
     }
 
     int opt_name = 1;
     int r = setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt_name, sizeof(opt_name));
     if (r < 0) {
-        err("Unable to set socket as reusable");
+        ERR("Unable to set socket as reusable");
+        return -1;
+    }
+
+    timeval t;
+    r = setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &t, sizeof(t));
+    if (r < 0) {
+        ERR("Unable to set immediate timeout for socket operations");
         return -1;
     }
 
@@ -387,13 +372,13 @@ int setup_listening_socket()
     bzero(&(local_addr.sin_zero), 8);
     r = bind(socket_fd, (struct sockaddr*)&local_addr, sizeof(local_addr));
     if (r < 0) {
-        err("Unable to bind socket ", socket_fd);
+        ERR("Unable to bind socket ", socket_fd);
         return -1;
     }
 
     r = listen(socket_fd, RECYCLR_BACKLOG);
     if (r < 0) {
-        err("Unable to listen on socket ", socket_fd);
+        ERR("Unable to listen on socket ", socket_fd);
         return -1;
     }
 
@@ -414,32 +399,41 @@ int set_socket_flags(int socket_fd, int flags)
         return socket_flags;
     }
 
-    return fcntl(socket_fd, F_SETFL, socket_flags | O_NONBLOCK);
+    return fcntl(socket_fd, F_SETFL, socket_flags | flags);
 }
 
-int handle_epoll_event(struct epoll_event& event, std::vector<char*>& buffer_stack)
+int handle_epoll_event(struct epoll_event& event, buffer_queue& queue)
 {
     if (event.events & EPOLLIN) {
         size_t read_length = 0;
-        char big_buffer[1 << 20];
+        char big_buffer[1 << 20]; //1MB lmaoo
 
-        int r = 0;
-        while ((r = recv(event.data.fd, big_buffer + read_length, sizeof(big_buffer) - read_length, 0)) > 0) {
+        int r;
+        while ((r = recv(event.data.fd, big_buffer + read_length, sizeof(big_buffer) - read_length, MSG_DONTWAIT)) > 0) {
             read_length += r;
+        }
+
+        if (r == 0) {
+            LOG("Closing connection, fd: ", event.data.fd);
+            ::close(event.data.fd);
         }
 
         if (!read_length) {
             return 0;
         }
 
-        char* stack_buffer = (char*) malloc(read_length);
-        if (!stack_buffer) {
-            err("Unable to allocate byte buffer");
+        char* heap_buffer = (char*) malloc(read_length);
+        if (!heap_buffer) {
+            ERR("Unable to allocate byte buffer");
             return -1;
         }
 
-        memcpy(stack_buffer, big_buffer, read_length);
-        buffer_stack.push_back(stack_buffer);
+        memcpy(heap_buffer, big_buffer, read_length);
+        queue.push_back(std::make_pair(heap_buffer, read_length));
+    }
+
+    if (event.events & (EPOLLERR | EPOLLHUP)) {
+        ::close(event.data.fd);
     }
 
     return 0;
