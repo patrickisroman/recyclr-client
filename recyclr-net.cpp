@@ -152,6 +152,27 @@ NetworkBlob::~NetworkBlob()
     }
 }
 
+/////////////// Connection ////////////////
+Connection::Connection(int fd, int buffer_size) :
+    _fd(fd),
+    _in_buffer(buffer_size),
+    _out_buffer(buffer_size)
+{
+}
+
+Connection::~Connection()
+{
+    if (_fd >= 0) {
+        int r = ::close(_fd);
+        if (r < 0) {
+            int err = errno;
+            if (err == EIO) {
+                ERR("Unable to close socket fd ", _fd);
+            }
+        }
+    }
+}
+
 //////////////// NetClient ////////////////
 NetClient::NetClient() :
     _thr(nullptr),
@@ -159,7 +180,6 @@ NetClient::NetClient() :
     _epoll_fd(-1),
     _epoll_events(),
     _running(false),
-    _buffer_queue(),
     _state_fn(nullptr)
 {
     _running = true;
@@ -225,7 +245,7 @@ u32 NetClient::listen()
     }
 
     struct epoll_event listening_socket_event;
-    listening_socket_event.data.fd = _socket_fd;
+    listening_socket_event.data.ptr = nullptr;
     listening_socket_event.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLET;
     r = epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, _socket_fd, &listening_socket_event);
     if (r < 0) {
@@ -251,11 +271,12 @@ u32 NetClient::handle_socket()
     for (int i = 0; i < events; i++) {
         struct epoll_event& fd_event = _epoll_events[i];
 
-        if (fd_event.events & EPOLLERR) {
-            ERR("ERR ON SOCKET ", fd_event.data.fd);
+        Connection* conn = (Connection*) fd_event.data.ptr;
+        if (fd_event.events & EPOLLERR && conn) {
+            ERR("ERR ON SOCKET ", conn->get_fd());
         }
 
-        if (fd_event.data.fd == _socket_fd) {
+        if (conn == nullptr) {
             int conn_fd = accept_connection(_socket_fd);
             if (conn_fd < 0) {
                 int e = errno;
@@ -272,8 +293,13 @@ u32 NetClient::handle_socket()
                     return -1;
                 }
 
+                Connection* conn = new Connection(conn_fd, CONNECTION_BUFFER_LEN);
+                if (!conn) {
+                    ERR("Unable to allocate connection for new fd ", conn_fd);
+                }
+
                 struct epoll_event event;
-                event.data.fd = conn_fd;
+                event.data.ptr = conn;
                 event.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLET;
                 r = epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, conn_fd, &event);
                 if (r < 0) {
@@ -285,12 +311,8 @@ u32 NetClient::handle_socket()
                 LOG("Accepted a connection on fd ", conn_fd);
             }
         } else {
-            handle_epoll_event(fd_event, _buffer_queue);
+            handle_epoll_event(fd_event, conn);
         }
-    }
-    
-    if (!_buffer_queue.empty()) {
-        _state_fn = &NetClient::process_blobs;
     }
 
     return 0;
@@ -298,11 +320,6 @@ u32 NetClient::handle_socket()
 
 u32 NetClient::process_blobs()
 {
-    for (auto it = _buffer_queue.begin(); it < _buffer_queue.end(); it++) {
-        local_buffer buf;
-        pop_message(&buf);
-    }
-
     _state_fn = &NetClient::handle_socket;
     return 0;
 }
@@ -312,35 +329,40 @@ u32 NetClient::close()
     return 1;
 }
 
-bool NetClient::pop_message(local_buffer* buffer)
-{
-    if (!buffer) {
-        return false;
-    }
-
-    if (_buffer_queue.empty()) {
-        return false;
-    }
-
-    auto buffer_pair = _buffer_queue.front();
-    _buffer_queue.pop_front();
-
-    struct blob_header* front_blob_header = (struct blob_header*) buffer_pair.first;
-
-    if (front_blob_header->magic != BLOB_MAGIC) {
-        free(buffer_pair.first);
-        return pop_message(buffer);
-    }
-
-    buffer->buffer = buffer_pair.first;
-    buffer->len    = buffer_pair.second;
-
-    return true;
-}
-
 void NetClient::stop()
 {
     _running = false;
+}
+
+int NetClient::handle_epoll_event(struct epoll_event& event, Connection* conn)
+{
+    if (event.events & EPOLLIN) {
+        size_t read_length = 0;
+        char big_buffer[1 << 20]; // 1MB lmaoo
+
+        int r;
+        while ((r = recv(conn->get_fd(), big_buffer + read_length, sizeof(big_buffer) - read_length, MSG_DONTWAIT)) > 0) {
+            read_length += r;
+        }
+
+        if (r == 0) {
+            LOG("Closing connection, fd: ", conn->get_fd());
+            delete conn;
+        }
+
+        if (!read_length) {
+            return 0;
+        }
+
+        size_t written = conn->_in_buffer.write(big_buffer, read_length);
+    }
+
+    if (event.events & (EPOLLERR | EPOLLHUP)) {
+        LOG("Closing connection, fd: ", conn->get_fd());
+        delete conn;
+    }
+
+    return 0;
 }
 
 int setup_listening_socket()
@@ -400,41 +422,4 @@ int set_socket_flags(int socket_fd, int flags)
     }
 
     return fcntl(socket_fd, F_SETFL, socket_flags | flags);
-}
-
-int handle_epoll_event(struct epoll_event& event, buffer_queue& queue)
-{
-    if (event.events & EPOLLIN) {
-        size_t read_length = 0;
-        char big_buffer[1 << 20]; //1MB lmaoo
-
-        int r;
-        while ((r = recv(event.data.fd, big_buffer + read_length, sizeof(big_buffer) - read_length, MSG_DONTWAIT)) > 0) {
-            read_length += r;
-        }
-
-        if (r == 0) {
-            LOG("Closing connection, fd: ", event.data.fd);
-            ::close(event.data.fd);
-        }
-
-        if (!read_length) {
-            return 0;
-        }
-
-        char* heap_buffer = (char*) malloc(read_length);
-        if (!heap_buffer) {
-            ERR("Unable to allocate byte buffer");
-            return -1;
-        }
-
-        memcpy(heap_buffer, big_buffer, read_length);
-        queue.push_back(std::make_pair(heap_buffer, read_length));
-    }
-
-    if (event.events & (EPOLLERR | EPOLLHUP)) {
-        ::close(event.data.fd);
-    }
-
-    return 0;
 }

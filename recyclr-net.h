@@ -1,4 +1,5 @@
 #include "recyclr-utils.h"
+#include "recyclr-buffer.h"
 
 #include <string>
 #include <vector>
@@ -12,7 +13,6 @@
 #define BLOB_HEADER_LEN_BYTES   1 << 6
 
 using namespace std;
-using buffer_queue = deque<pair<char*, size_t>>;
 
 enum BlobOpCode
 {
@@ -69,8 +69,27 @@ class NetworkBlob
     bool append_payload(void* data, size_t len);
 };
 
-// TODO Make a parent template class for Client
-// ugh that's gonna be whacky function ptr logic
+#define CONNECTION_BUFFER_LEN 1<< 20
+
+class NetClient;
+
+class Connection {
+    friend class NetClient;
+
+    protected:
+    int        _fd;
+    RingBuffer _in_buffer;
+    RingBuffer _out_buffer;
+
+    public:
+    Connection(int _fd = -1, int buffer_size = CONNECTION_BUFFER_LEN);
+    ~Connection();
+
+    int get_fd()
+    {
+        return _fd;
+    }
+};
 
 class NetClient
 {
@@ -80,7 +99,6 @@ class NetClient
     int                 _epoll_fd;
     struct epoll_event* _epoll_events;
     bool                _running;
-    buffer_queue        _buffer_queue;
 
     u32 (NetClient::*_state_fn)();
 
@@ -94,11 +112,10 @@ class NetClient
     u32 process_blobs();
     u32 close();
 
-    bool pop_message(local_buffer* buffer);
     void stop();
+    int handle_epoll_event(struct epoll_event& event, Connection* conn);
 };
 
 int setup_listening_socket();
 int accept_connection(int socket);
 int set_socket_flags(int socket_fd, int flags);
-int handle_epoll_event(struct epoll_event& event, buffer_queue& queue);
