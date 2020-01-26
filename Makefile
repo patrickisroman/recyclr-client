@@ -1,7 +1,7 @@
 CXX     := g++
 CC      := gcc
 LD      := g++
-CFLAGS  := -std=gnu++17 -pthread
+CFLAGS  := -std=gnu++17 -pthread -g
 LDFLAGS := $(CFLAGS)
 
 RM      := rm

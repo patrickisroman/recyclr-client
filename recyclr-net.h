@@ -69,7 +69,7 @@ class NetworkBlob
     bool append_payload(void* data, size_t len);
 };
 
-#define CONNECTION_BUFFER_LEN 1<< 20
+#define CONNECTION_BUFFER_LEN 1 << 20
 
 class NetClient;
 
@@ -80,15 +80,25 @@ class Connection {
     int        _fd;
     RingBuffer _in_buffer;
     RingBuffer _out_buffer;
+    char       _peer_ipv4_addr[32];
 
     public:
     Connection(int _fd = -1, int buffer_size = CONNECTION_BUFFER_LEN);
     ~Connection();
 
-    int get_fd()
+    int get_fd() const
     {
         return _fd;
     }
+
+    char* get_peer_ipv4_addr() const
+    {
+        return const_cast<char*>(_peer_ipv4_addr);
+    }
+
+    void recv();
+    void send();
+    void prepare_send(const char* buffer, size_t len);
 };
 
 class NetClient

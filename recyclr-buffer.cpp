@@ -1,6 +1,5 @@
 #include "recyclr-buffer.h"
 
-
 RingBuffer::RingBuffer(size_t capacity) :
     _start_idx(0),
     _end_idx(0),
@@ -71,4 +70,13 @@ size_t RingBuffer::read(char* data, size_t len)
 
     _size -= read_len;
     return read_len;
+}
+
+size_t RingBuffer::read_all(char* data, size_t buffer_len)
+{
+    if (buffer_len < _size) {
+        return 0;
+    }
+
+    return read(data, _size);
 }

@@ -123,7 +123,9 @@ int main() {
     RecyclrClient client;
     client.setup_client(true);
 
-    while (1) {}
+    while (1) {
+        
+    }
 
     return 0;
 }

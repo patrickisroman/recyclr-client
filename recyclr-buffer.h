@@ -28,4 +28,5 @@ class RingBuffer
 
     size_t write(const char* buffer, size_t len);
     size_t read(char* buffer, size_t len);
+    size_t read_all(char* buffer, size_t buffer_len);
 };

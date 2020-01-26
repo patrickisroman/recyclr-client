@@ -6,7 +6,9 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <fcntl.h>
+
 
 //////////////// NetworkBlob //////////////////
 
@@ -158,6 +160,10 @@ Connection::Connection(int fd, int buffer_size) :
     _in_buffer(buffer_size),
     _out_buffer(buffer_size)
 {
+    struct sockaddr_in addr;
+    socklen_t addr_size = sizeof(addr);
+    int r = getpeername(fd, (struct sockaddr*)&addr, &addr_size);
+    strcpy(_peer_ipv4_addr, inet_ntoa(addr.sin_addr));
 }
 
 Connection::~Connection()
@@ -171,6 +177,49 @@ Connection::~Connection()
             }
         }
     }
+}
+
+void Connection::recv()
+{
+    size_t read_length = 0;
+    char big_buffer[1 << 20]; // 1MB lmaoo. lets find a way to nix this allocation
+    int r;
+    while ((r = ::recv(_fd, big_buffer + read_length, sizeof(big_buffer) - read_length, MSG_DONTWAIT)) > 0) {
+        read_length += r;
+    }
+
+    if (r == 0) {
+        LOG("Closing connection, fd: ", _fd);
+        delete this;
+        return;
+    }
+
+    if (!read_length) {
+        return;
+    }
+
+    size_t written = _in_buffer.write(big_buffer, read_length);
+}
+
+void Connection::send()
+{
+    if (_out_buffer.get_size() == 0) {
+        return;
+    }
+    char big_buffer[1 << 20];
+    size_t bytes_remaining = _out_buffer.read_all(big_buffer, sizeof(big_buffer));
+    size_t bytes_sent = 0;
+
+    int r;
+    while ((r = ::send(_fd, big_buffer + bytes_sent, bytes_remaining, MSG_DONTWAIT)) > 0) {
+        bytes_remaining -= r;
+        bytes_sent += r;
+    }
+}
+
+void Connection::prepare_send(const char* buffer, size_t len)
+{
+    _out_buffer.write(buffer, len);
 }
 
 //////////////// NetClient ////////////////
@@ -288,7 +337,7 @@ u32 NetClient::handle_socket()
             if (conn_fd < 0) {
                 int e = errno;
                 if (e != EWOULDBLOCK && e != EAGAIN) {
-                    ERR("Fatal error while accepting a new connection");
+                    ERR("Fatal error while accepting a new connection, err: ", e);
                     _state_fn = &NetClient::close;
                     return -1;
                 }
@@ -310,12 +359,12 @@ u32 NetClient::handle_socket()
                 event.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLET;
                 r = epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, conn_fd, &event);
                 if (r < 0) {
-                    ERR("Unable to add new connection to epoll listener");
+                    ERR("Unable to add new connection to epoll listener, err: ", r);
                     _state_fn = &NetClient::close;
                     return -1;
                 }
 
-                LOG("Accepted a connection on fd ", conn_fd);
+                LOG("Accepted a connection from: ", conn->get_peer_ipv4_addr());
             }
         } else {
             handle_epoll_event(fd_event, conn);
@@ -343,30 +392,20 @@ void NetClient::stop()
 
 int NetClient::handle_epoll_event(struct epoll_event& event, Connection* conn)
 {
-    if (event.events & EPOLLIN) {
-        size_t read_length = 0;
-        char big_buffer[1 << 20]; // 1MB lmaoo
-
-        int r;
-        while ((r = recv(conn->get_fd(), big_buffer + read_length, sizeof(big_buffer) - read_length, MSG_DONTWAIT)) > 0) {
-            read_length += r;
-        }
-
-        if (r == 0) {
-            LOG("Closing connection, fd: ", conn->get_fd());
-            delete conn;
-        }
-
-        if (!read_length) {
-            return 0;
-        }
-
-        size_t written = conn->_in_buffer.write(big_buffer, read_length);
+    if (!conn) {
+        return -1;
     }
 
     if (event.events & (EPOLLERR | EPOLLHUP)) {
-        LOG("Closing connection, fd: ", conn->get_fd());
-        delete conn;
+        LOG("ERR Closing connection, fd: ", conn->get_fd());
+        if (conn) {
+            delete conn;
+            return -1;
+        }
+    }
+
+    if (event.events & EPOLLIN) {
+        conn->recv();
     }
 
     return 0;
