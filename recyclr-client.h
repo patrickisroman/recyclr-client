@@ -1,5 +1,7 @@
 #include "recyclr-types.h"
 #include "recyclr-net.h"
+#include "recyclr-controller.h"
+#include "recyclr-image-controller.h"
 
 #include <string>
 
@@ -9,10 +11,12 @@ const static u32 CLIENT_VERSION_MINOR = 0;
 class RecyclrClient {
     private:
         struct in_addr client_ip;
-        NetClient*     v_client;
-        u32            num_cores;
-        u32            client_version_major;
-        u32            client_version_minor;
+        NetClient*       net_client;
+        Controller*      controller;
+        ImageController* image_controller;
+        u32              num_cores;
+        u32              client_version_major;
+        u32              client_version_minor;
 
     public:
         RecyclrClient();

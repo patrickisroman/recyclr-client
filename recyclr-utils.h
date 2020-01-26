@@ -4,6 +4,7 @@
 #include <sys/time.h>
 #include <thread>
 #include <iomanip>
+#include <mutex>
 
 #include "recyclr-types.h"
 
@@ -31,7 +32,7 @@ void log(const char* prefix, int line, const char* file, ArgType && ...args)
 {
     double time = ((double) micros()) / MICROS_PER_SECOND;
     std::cout << std::fixed;
-    std::cout << "[" << time << "] [" << file << ":" << line << "] (" << sched_getcpu() << ") ";
+    std::cout << "[" << time << "] (" << sched_getcpu() << ") [" << file << ":" << line << "] ";
     (std::cout << ... << args);
     std::cout << "\n";
 }

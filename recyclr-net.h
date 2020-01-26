@@ -107,6 +107,7 @@ class NetClient
     ~NetClient();
 
     u32 run();
+    u32 start();
     u32 listen();
     u32 handle_socket();
     u32 process_blobs();

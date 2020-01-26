@@ -187,7 +187,7 @@ NetClient::NetClient() :
 
     int r = set_thread_affinity(_thr, NETWORK_THREAD_MASK);
     if (r) {
-        ERR("Unable to set thread affinity for vertical network thread");
+        ERR("Unable to set thread affinity for client network thread");
     }
 }
 
@@ -203,6 +203,7 @@ NetClient::~NetClient()
     if (_thr) {
         _running = false;
         _thr->join();
+        delete _thr;
         _thr = nullptr;
     }
 }
@@ -210,7 +211,7 @@ NetClient::~NetClient()
 u32 NetClient::run()
 {
     if (!_state_fn) {
-        _state_fn = &NetClient::listen;
+        _state_fn = &NetClient::start;
     }
 
     while (_state_fn && _running) {
@@ -219,6 +220,12 @@ u32 NetClient::run()
         }
     }
 
+    return 0;
+}
+
+u32 NetClient::start()
+{
+    _state_fn = &NetClient::listen;
     return 0;
 }
 

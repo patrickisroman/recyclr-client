@@ -12,14 +12,26 @@ RecyclrClient::RecyclrClient() :
     num_cores(0),
     client_ip()
 {
-    v_client = new NetClient();
+    net_client = new NetClient();
+    controller = new Controller();
+    image_controller = new ImageController();
 }
 
 RecyclrClient::~RecyclrClient()
 {
-    if (v_client) {
-        delete v_client;
-        v_client = NULL;
+    if (net_client) {
+        delete net_client;
+        net_client = nullptr;
+    }
+
+    if (controller) {
+        delete controller;
+        controller = nullptr;
+    }
+
+    if (image_controller) {
+        delete image_controller;
+        image_controller = nullptr;
     }
 }
 
