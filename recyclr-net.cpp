@@ -32,6 +32,8 @@ local_buffer* NetworkBlob::from_buffer(void* buffer, size_t len)
             return nullptr;
         }
 
+        memset(ptr, 0x0, len);
+
         if (_blob_buffer.buffer) {
             free(_blob_buffer.buffer);
         }
@@ -188,17 +190,14 @@ void Connection::recv()
         read_length += r;
     }
 
+    if (read_length > 0) {
+        _in_buffer.write(big_buffer, read_length);
+    }
+
     if (r == 0) {
         LOG("Closing connection, fd: ", _fd);
         delete this;
-        return;
     }
-
-    if (!read_length) {
-        return;
-    }
-
-    size_t written = _in_buffer.write(big_buffer, read_length);
 }
 
 void Connection::send()

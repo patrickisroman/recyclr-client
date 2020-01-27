@@ -39,11 +39,10 @@ struct local_buffer {
     size_t len;
 };
 
-struct NetworkBlobHeader
-{
+struct NetworkBlobHeader {
     union {
-        unsigned char      buffer[BLOB_HEADER_LEN_BYTES];
         struct blob_header header_data;
+        unsigned char      buffer[BLOB_HEADER_LEN_BYTES];
     };
 };
 
