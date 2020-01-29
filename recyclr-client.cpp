@@ -6,6 +6,8 @@
 #include "recyclr-client.h"
 #include "recyclr-commands.h"
 
+#include "cds/init.h"
+
 RecyclrClient::RecyclrClient() :
     client_version_major(CLIENT_VERSION_MAJOR),
     client_version_minor(CLIENT_VERSION_MINOR),

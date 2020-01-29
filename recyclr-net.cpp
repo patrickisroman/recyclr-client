@@ -181,7 +181,7 @@ Connection::~Connection()
     }
 }
 
-void Connection::recv()
+size_t Connection::recv()
 {
     size_t read_length = 0;
     char big_buffer[1 << 20]; // 1MB lmaoo. lets find a way to nix this allocation
@@ -197,7 +197,10 @@ void Connection::recv()
     if (r == 0) {
         LOG("Closing connection, fd: ", _fd);
         delete this;
+        return 0;
     }
+
+    return read_length;
 }
 
 void Connection::send()
@@ -404,7 +407,10 @@ int NetClient::handle_epoll_event(struct epoll_event& event, Connection* conn)
     }
 
     if (event.events & EPOLLIN) {
-        conn->recv();
+        size_t read_bytes = conn->recv();
+        if (read_bytes > 0) {
+            struct blob_header* header = conn->get_in_buffer().peek<struct blob_header>();
+        }
     }
 
     return 0;

@@ -95,9 +95,14 @@ class Connection {
         return const_cast<char*>(_peer_ipv4_addr);
     }
 
-    void recv();
-    void send();
-    void prepare_send(const char* buffer, size_t len);
+    RingBuffer& get_in_buffer()
+    {
+        return _in_buffer;
+    }
+
+    size_t recv();
+    void   send();
+    void   prepare_send(const char* buffer, size_t len);
 };
 
 class NetClient

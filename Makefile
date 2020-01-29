@@ -1,9 +1,8 @@
 CXX     := g++
 CC      := gcc
 LD      := g++
-CFLAGS  := -std=gnu++17 -pthread -g
+CFLAGS  := -std=gnu++17 -pthread -g -I./
 LDFLAGS := $(CFLAGS)
-
 RM      := rm
 
 RECYCLR_SRCS  := $(wildcard *.cpp)
