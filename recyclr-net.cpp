@@ -9,153 +9,6 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
-
-//////////////// NetworkBlob //////////////////
-
-NetworkBlob::NetworkBlob() :
-    _header(),
-    _blob_buffer(),
-    _payload_buffer()
-{
-}
-
-local_buffer* NetworkBlob::from_buffer(void* buffer, size_t len)
-{
-    if (!buffer) {
-        return &_blob_buffer;
-    }
-
-    if (len != _blob_buffer.len) {
-        void* ptr = malloc(len);
-        if (!ptr) {
-            ERR("Unable to realloc buffer to load blob from buffer");
-            return nullptr;
-        }
-
-        memset(ptr, 0x0, len);
-
-        if (_blob_buffer.buffer) {
-            free(_blob_buffer.buffer);
-        }
-
-        _blob_buffer = {ptr, len};
-    }
-
-    memcpy(_blob_buffer.buffer, buffer, len);
-    return &_blob_buffer;
-}
-
-local_buffer* NetworkBlob::load_buffer()
-{
-    size_t blob_buffer_size = sizeof(NetworkBlobHeader) + _payload_buffer.len;
-
-    // We have an allocated buffer, but it's the wrong size. Deallocate.
-    if (_blob_buffer.buffer && _blob_buffer.len != blob_buffer_size) {
-        free(_blob_buffer.buffer);
-        _blob_buffer = {nullptr, 0};
-    }
-
-    // We don't have a blob buffer. Allocate.
-    if (!_blob_buffer.buffer) {
-        _blob_buffer.buffer = malloc(blob_buffer_size);
-
-        if (!_blob_buffer.buffer) {
-            _blob_buffer.len = 0;
-            ERR("Unable to allocate blob message buffer");
-            return nullptr;
-        }
-    }
-
-    char* blob_buffer_ptr = reinterpret_cast<char*>(_blob_buffer.buffer);
-
-    // Copy header
-    *(reinterpret_cast<NetworkBlobHeader*>(blob_buffer_ptr)) = _header;
-    blob_buffer_ptr += sizeof(NetworkBlobHeader);
-
-    // Copy payload
-    memcpy(blob_buffer_ptr, _payload_buffer.buffer, _payload_buffer.len);
-    return &_blob_buffer;
-}
-
-bool NetworkBlob::set_payload(void* data, size_t len)
-{
-    if (!data) {
-        return false;
-    }
-
-    if (!len) {
-        return true;
-    }
-
-    // Payload already exists, but it's the wrong size. Reallocate
-    if (_payload_buffer.buffer && _payload_buffer.len != len) {
-        void* payload_buffer_ptr = malloc(len);
-        if (!payload_buffer_ptr) {
-            ERR("Unable to allocate payload buffer");
-            return false;
-        }
-
-        free(_payload_buffer.buffer);
-        _payload_buffer = {payload_buffer_ptr, len};
-    }
-
-    // No payload exists. Allocate.
-    if (!_payload_buffer.buffer) {
-        void* payload_buffer_ptr = malloc(len);
-        if (!payload_buffer_ptr) {
-            ERR("Unable to allocate payload buffer");
-            return false;
-        }
-        _payload_buffer = {payload_buffer_ptr, len};
-    }
-
-    memcpy(_payload_buffer.buffer, data, len);
-
-    return true;
-}
-
-bool NetworkBlob::append_payload(void* data, size_t len)
-{
-    if (!data) {
-        return false;
-    }
-
-    if (!len) {
-        return true;
-    }
-
-    if (!_payload_buffer.buffer) {
-        return set_payload(data, len);
-    }
-
-    void* payload_copy_buffer = malloc(_payload_buffer.len + len);
-    char* payload_copy_ptr = reinterpret_cast<char*>(payload_copy_buffer);
-
-    memcpy(payload_copy_ptr, _payload_buffer.buffer, _payload_buffer.len);
-    memcpy(payload_copy_ptr + _payload_buffer.len, data, len);
-
-    // This is NOT thread safe; thus why we must pin Networking to a single core
-    free(_payload_buffer.buffer);
-    _payload_buffer.buffer = payload_copy_ptr;
-
-    return true;
-}
-
-NetworkBlob::~NetworkBlob()
-{
-    // clean up the payload buffer
-    if (_payload_buffer.buffer) {
-        free(_payload_buffer.buffer);
-        _payload_buffer = {nullptr, 0};
-    }
-
-    // clean up the blob buffer
-    if (_blob_buffer.buffer) {
-        free(_blob_buffer.buffer);
-        _blob_buffer = {nullptr, 0};
-    }
-}
-
 /////////////// Connection ////////////////
 Connection::Connection(int fd, int buffer_size) :
     _fd(fd),
@@ -257,6 +110,11 @@ NetClient::~NetClient()
         delete _thr;
         _thr = nullptr;
     }
+
+    if (_epoll_events) {
+        delete _epoll_events;
+        _epoll_events = nullptr;
+    }
 }
 
 u32 NetClient::run()
@@ -312,7 +170,7 @@ u32 NetClient::listen()
         return -1;
     }
 
-    _epoll_events = (struct epoll_event*) calloc(RECYCLR_MAX_FDS, sizeof(struct epoll_event));
+    _epoll_events = new struct epoll_event[RECYCLR_MAX_FDS];
     if (!_epoll_events) {
         ERR("Unable to allocate epoll event list");
         _state_fn = &NetClient::close;
@@ -376,7 +234,7 @@ u32 NetClient::handle_socket()
     return 0;
 }
 
-u32 NetClient::process_blobs()
+u32 NetClient::process_msgs()
 {
     _state_fn = &NetClient::handle_socket;
     return 0;
@@ -406,11 +264,14 @@ int NetClient::handle_epoll_event(struct epoll_event& event, Connection* conn)
         }
     }
 
+    // data received on socket
     if (event.events & EPOLLIN) {
-        size_t read_bytes = conn->recv();
-        if (read_bytes > 0) {
-            struct blob_header* header = conn->get_in_buffer().peek<struct blob_header>();
-        }
+        conn->recv();
+    }
+
+    // data was unable to send on socket, now available
+    if (Event.events & EPOLLOUT) {
+        conn->send();
     }
 
     return 0;

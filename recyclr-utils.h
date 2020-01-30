@@ -5,6 +5,8 @@
 #include <thread>
 #include <iomanip>
 #include <mutex>
+#include <stdarg.h>
+#include <string.h>
 
 #include "recyclr-types.h"
 
@@ -24,17 +26,18 @@ enum thread_mask {
 u64 micros();
 u64 millis();
 
-#define LOG(...) log("[LOG] ", __LINE__, __FILE__, __VA_ARGS__)
-#define ERR(...) log("[ERROR] ", __LINE__, __FILE__, __VA_ARGS__);
+#define LOG(...) log("LOG",   __LINE__, __FILE__, __VA_ARGS__)
+#define ERR(...) log("ERROR", __LINE__, __FILE__, __VA_ARGS__)
 
 template<typename ...ArgType>
 void log(const char* prefix, int line, const char* file, ArgType && ...args)
 {
+    char prefix_buffer[128];
     double time = ((double) micros()) / MICROS_PER_SECOND;
-    std::cout << std::fixed;
-    std::cout << "[" << time << "] (" << sched_getcpu() << ") [" << file << ":" << line << "] ";
-    (std::cout << ... << args);
-    std::cout << "\n";
+    sprintf(prefix_buffer, "[%s] [%.6f] (%d) [%s:%d] ", prefix, time, sched_getcpu(), file, line);
+
+    (std::cout << prefix_buffer << ... << args);
+    std::cout << std::endl;
 }
 
 #define ATOMIC_ADD(ptr, val) \

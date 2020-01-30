@@ -10,11 +10,11 @@
 #define RECYCLR_MAX_CONNECTIONS 300
 #define RECYCLR_BACKLOG         32
 #define RECYCLR_MAX_FDS         16 * 1024
-#define BLOB_HEADER_LEN_BYTES   1 << 6
+#define MSG_HEADER_LEN_BYTES    1 << 6
+#define MSG_MAGIC               0x83702020
+#define CONNECTION_BUFFER_LEN   1 << 20
 
-using namespace std;
-
-enum BlobOpCode
+enum msg_op_code : u32
 {
     OP_CODE_OPEN_CONNECTION  = 0,
     OP_CODE_CLOSE_CONNECTION = 1,
@@ -23,52 +23,23 @@ enum BlobOpCode
     OP_CODE_RECALL = 4
 };
 
-#define BLOB_MAGIC 0x83702020
-
-struct blob_header {
-    BlobOpCode op_code; 
-    u32        magic;
-    u64        message_length_bytes;
-    u64        source_id;
-    u64        target_id;
-    u64        message_id;
+struct msg_header {
+    msg_op_code op_code; 
+    u32         magic;
+    u64         message_length_bytes;
+    u64         source_id;
+    u64         target_id;
+    u64         message_id;
 };
 
-struct local_buffer {
-    void*  buffer;
-    size_t len;
-};
-
-struct NetworkBlobHeader {
+struct MsgHeader {
     union {
-        struct blob_header header_data;
-        unsigned char      buffer[BLOB_HEADER_LEN_BYTES];
+        struct msg_header header_data;
+        unsigned char     buffer[MSG_HEADER_LEN_BYTES];
     };
 };
 
-static_assert(sizeof(NetworkBlobHeader) == BLOB_HEADER_LEN_BYTES);
-
-class NetworkBlob
-{
-    protected:
-    NetworkBlobHeader _header;
-
-    private:
-    local_buffer _blob_buffer;
-    local_buffer _payload_buffer;
-
-    public:
-    NetworkBlob();
-    ~NetworkBlob();
-
-    local_buffer* from_buffer(void* buffer, size_t len);
-    local_buffer* load_buffer();
-    
-    bool set_payload(void* data, size_t len);
-    bool append_payload(void* data, size_t len);
-};
-
-#define CONNECTION_BUFFER_LEN 1 << 20
+static_assert(sizeof(MsgHeader) == MSG_HEADER_LEN_BYTES);
 
 class NetClient;
 
@@ -108,7 +79,7 @@ class Connection {
 class NetClient
 {
     protected:
-    thread*             _thr;
+    std::thread*        _thr;
     int                 _socket_fd;
     int                 _epoll_fd;
     struct epoll_event* _epoll_events;
@@ -124,7 +95,7 @@ class NetClient
     u32 start();
     u32 listen();
     u32 handle_socket();
-    u32 process_blobs();
+    u32 process_msgs();
     u32 close();
 
     void stop();
