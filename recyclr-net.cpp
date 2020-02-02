@@ -19,25 +19,14 @@ Connection::Connection(int fd, int buffer_size) :
     socklen_t addr_size = sizeof(addr);
     int r = getpeername(fd, (struct sockaddr*)&addr, &addr_size);
     strcpy(_peer_ipv4_addr, inet_ntoa(addr.sin_addr));
-}
 
-Connection::~Connection()
-{
-    if (_fd >= 0) {
-        int r = ::close(_fd);
-        if (r < 0) {
-            int err = errno;
-            if (err == EIO) {
-                ERR("Unable to close socket fd ", _fd);
-            }
-        }
-    }
+    _state_fn = &Connection::await_handshake;
 }
 
 size_t Connection::recv()
 {
     size_t read_length = 0;
-    char big_buffer[1 << 20]; // 1MB lmaoo. lets find a way to nix this allocation
+    char big_buffer[1 << 20];
     int r;
     while ((r = ::recv(_fd, big_buffer + read_length, sizeof(big_buffer) - read_length, MSG_DONTWAIT)) > 0) {
         read_length += r;
@@ -61,6 +50,7 @@ void Connection::send()
     if (_out_buffer.get_size() == 0) {
         return;
     }
+
     char big_buffer[1 << 20];
     size_t bytes_remaining = _out_buffer.read_all(big_buffer, sizeof(big_buffer));
     size_t bytes_sent = 0;
@@ -72,9 +62,103 @@ void Connection::send()
     }
 }
 
-void Connection::prepare_send(const char* buffer, size_t len)
+void Connection::prepare_send(void* buffer, size_t len, bool immediate)
 {
-    _out_buffer.write(buffer, len);
+    _out_buffer.write(reinterpret_cast<char*>(buffer), len);
+    if (immediate) {
+        send();
+    }
+}
+
+u32 Connection::await_handshake()
+{
+    size_t in_buffer_size = _in_buffer.get_size();
+
+    // no new messages. return control
+    if (!in_buffer_size) {
+        return 0;
+    }
+
+    // not enough data to read a header
+    if (UNLIKELY(in_buffer_size < sizeof(struct recyclr_msg_header))) {
+        return 0;
+    }
+
+    struct recyclr_msg_header* header = _in_buffer.peek<struct recyclr_msg_header>();
+
+    // does the magic match?
+    if (header->msg_magic != MSG_MAGIC) {
+        _state_fn = &Connection::close;
+        return 1;
+    }
+
+    header = &_reusable_header;
+    _in_buffer.pop(header);
+
+    int r = 0;
+    switch(header->message_code) {
+        case MessageCode::open_connection:
+            r = open_connection();
+            break;
+        default:
+            return 1;
+    }
+
+    return r;
+}
+
+u32 Connection::open_connection()
+{
+    u32 msg_length = _reusable_header.msg_length;
+    // this is an invalid opening frame if msg_length > 0
+    if (_reusable_header.msg_length) {
+        return 0;
+    }
+
+    struct recyclr_msg_header response_header;
+    response_header.message_code = MessageCode::ack_open_connection;
+    response_header.priority = 0;
+    response_header.micro_ts = micros();
+    response_header.msg_length = 0;
+    response_header.msg_magic = MSG_MAGIC;
+
+    prepare_send(&response_header, sizeof(response_header), true);
+
+    _state_fn = &Connection::handle_open_channel;
+    return 0;
+}
+
+u32 Connection::handle_open_channel()
+{
+    _state_fn = &Connection::handle_open_channel;
+    return 0;
+}
+
+u32 Connection::state()
+{
+    return (this->*_state_fn)();
+}
+
+u32 Connection::close()
+{
+    if (_fd >= 0) {
+        int r = ::close(_fd);
+        if (r < 0) {
+            int err = errno;
+            if (err == EIO) {
+                ERR("Unable to close socket fd ", _fd);
+                return -1;
+            }
+        }
+        _fd = -1;
+    }
+
+    return 0;
+}
+
+Connection::~Connection()
+{
+    close();
 }
 
 //////////////// NetClient ////////////////
@@ -224,24 +308,40 @@ u32 NetClient::handle_socket()
                     return -1;
                 }
 
-                LOG("Accepted a connection from: ", conn->get_peer_ipv4_addr());
+                LOG("Accepted a connection from: ", conn->get_peer_ipv4_addr(), " [fd=", conn->get_fd(), "]");
+                _open_connections.push_back(conn);
             }
         } else {
             handle_epoll_event(fd_event, conn);
         }
     }
 
+    _state_fn = &NetClient::process_connections;
     return 0;
 }
 
-u32 NetClient::process_msgs()
+u32 NetClient::process_connections()
 {
+    for (auto it = _open_connections.begin(); it != _open_connections.end(); it++) {
+        (*it)->state();
+    }
+
     _state_fn = &NetClient::handle_socket;
     return 0;
 }
 
 u32 NetClient::close()
 {
+    // close out all our tcp sockets
+    for (auto it = _open_connections.begin(); it != _open_connections.end(); ++it) {
+        (*it)->close();   
+    }
+
+    // close our epoll fd
+    if (_epoll_fd >= 0) {
+        ::close(_epoll_fd);
+    }
+
     return 1;
 }
 

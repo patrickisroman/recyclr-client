@@ -1,5 +1,6 @@
 #include "recyclr-utils.h"
 #include "recyclr-buffer.h"
+#include "recyclr-msg.h"
 
 #include <string>
 #include <vector>
@@ -11,35 +12,7 @@
 #define RECYCLR_BACKLOG         32
 #define RECYCLR_MAX_FDS         16 * 1024
 #define MSG_HEADER_LEN_BYTES    1 << 6
-#define MSG_MAGIC               0x83702020
 #define CONNECTION_BUFFER_LEN   1 << 20
-
-enum msg_op_code : u32
-{
-    OP_CODE_OPEN_CONNECTION  = 0,
-    OP_CODE_CLOSE_CONNECTION = 1,
-    OP_CODE_REQUEST_CALLBACK = 2,
-    OP_CODE_PUSH_DATA = 3,
-    OP_CODE_RECALL = 4
-};
-
-struct msg_header {
-    msg_op_code op_code; 
-    u32         magic;
-    u64         message_length_bytes;
-    u64         source_id;
-    u64         target_id;
-    u64         message_id;
-};
-
-struct MsgHeader {
-    union {
-        struct msg_header header_data;
-        unsigned char     buffer[MSG_HEADER_LEN_BYTES];
-    };
-};
-
-static_assert(sizeof(MsgHeader) == MSG_HEADER_LEN_BYTES);
 
 class NetClient;
 
@@ -47,10 +20,13 @@ class Connection {
     friend class NetClient;
 
     protected:
-    int        _fd;
-    RingBuffer _in_buffer;
-    RingBuffer _out_buffer;
-    char       _peer_ipv4_addr[32];
+    RingBuffer                _in_buffer;
+    RingBuffer                _out_buffer;
+    int                       _fd;
+    char                      _peer_ipv4_addr[32];
+    struct recyclr_msg_header _reusable_header;
+
+    u32 (Connection::*_state_fn)();
 
     public:
     Connection(int _fd = -1, int buffer_size = CONNECTION_BUFFER_LEN);
@@ -73,7 +49,13 @@ class Connection {
 
     size_t recv();
     void   send();
-    void   prepare_send(const char* buffer, size_t len);
+    void   prepare_send(void* buffer, size_t len, bool immediate=false);
+
+    u32    await_handshake();
+    u32    open_connection();
+    u32    handle_open_channel();
+    u32    close();
+    u32    state();
 };
 
 class NetClient
@@ -85,6 +67,8 @@ class NetClient
     struct epoll_event* _epoll_events;
     bool                _running;
 
+    std::vector<Connection*> _open_connections;
+
     u32 (NetClient::*_state_fn)();
 
     public:
@@ -95,7 +79,7 @@ class NetClient
     u32 start();
     u32 listen();
     u32 handle_socket();
-    u32 process_msgs();
+    u32 process_connections();
     u32 close();
 
     void stop();

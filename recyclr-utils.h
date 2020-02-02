@@ -40,6 +40,7 @@ void log(const char* prefix, int line, const char* file, ArgType && ...args)
     std::cout << std::endl;
 }
 
+
 #define ATOMIC_ADD(ptr, val) \
     __sync_add_and_fetch(ptr, val)
 
@@ -51,6 +52,13 @@ void log(const char* prefix, int line, const char* file, ArgType && ...args)
 
 #define ATOMIC_CAS_BOOL(ptr, old_val, new_val) \
     __sync_bool_compare_and_swap(ptr, old_val, new_val)
+
+
+#define LIKELY(cond) \
+    __builtin_expect(static_cast<bool>(cond), 1)
+
+#define UNLIKELY(cond) \
+    __builtin_expect(static_cast<bool>(cond), 0)
 
 // Threading functions
 u32 set_thread_affinity(std::thread* thr, thread_mask affinity);

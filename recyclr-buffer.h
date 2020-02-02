@@ -4,7 +4,7 @@
 #include <cstring>
 
 // Yo this ain't threadsafe.
-// It's a-ok for now, but we should invest in thread-safe buffers!
+// It's ok for now, but we should invest in thread-safe buffers!
 class RingBuffer
 {
     protected:

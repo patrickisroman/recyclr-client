@@ -69,6 +69,14 @@ size_t RingBuffer::read(char* data, size_t len)
     }
 
     _size -= read_len;
+    
+    // reset to head if possible
+    // we only read from a single core so no data races
+    if (_size == 0) {
+        _start_idx = 0;
+        _end_idx = 0;
+    }
+
     return read_len;
 }
 
