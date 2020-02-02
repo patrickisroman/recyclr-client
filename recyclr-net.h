@@ -25,6 +25,7 @@ class Connection {
     int                       _fd;
     char                      _peer_ipv4_addr[32];
     struct recyclr_msg_header _reusable_header;
+    u64                       _last_send_time;
 
     u32 (Connection::*_state_fn)();
 

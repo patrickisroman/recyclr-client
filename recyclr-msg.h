@@ -6,7 +6,8 @@
 
 enum MessageCode {
     open_connection     = 1,
-    ack_open_connection = 2
+    ack_open_connection = 2,
+    test_op             = 3
 };
 
 struct recyclr_msg_header {

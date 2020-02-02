@@ -15,7 +15,10 @@ std::vector<Connection*> NetClient::_open_connections = {};
 Connection::Connection(int fd, int buffer_size) :
     _fd(fd),
     _in_buffer(buffer_size),
-    _out_buffer(buffer_size)
+    _out_buffer(buffer_size),
+    _peer_ipv4_addr(),
+    _reusable_header(),
+    _last_send_time(0)
 {
     struct sockaddr_in addr;
     socklen_t addr_size = sizeof(addr);
@@ -97,16 +100,11 @@ u32 Connection::await_handshake()
     header = &_reusable_header;
     _in_buffer.pop(header);
 
-    int r = 0;
-    switch(header->message_code) {
-        case MessageCode::open_connection:
-            r = open_connection();
-            break;
-        default:
-            return 1;
+    if (header->message_code != MessageCode::open_connection) {
+        return -1;
     }
 
-    return r;
+    return open_connection();
 }
 
 u32 Connection::open_connection()
@@ -118,7 +116,7 @@ u32 Connection::open_connection()
     }
 
     struct recyclr_msg_header response_header;
-    response_header.message_code = MessageCode::ack_open_connection;
+    response_header.message_code = MessageCode::test_op;
     response_header.priority = 0;
     response_header.micro_ts = micros();
     response_header.msg_length = 0;
@@ -132,7 +130,32 @@ u32 Connection::open_connection()
 
 u32 Connection::handle_open_channel()
 {
-    _state_fn = &Connection::handle_open_channel;
+    size_t buffer_size = _in_buffer.get_size();
+    
+    if (!buffer_size) {
+        return 0;
+    }
+
+    if (buffer_size < sizeof(struct recyclr_msg_header)) {
+        return 0;
+    }
+
+    _in_buffer.pop(&_reusable_header);
+
+    if (_reusable_header.msg_magic != MSG_MAGIC) {
+        return -1;
+    }
+
+    struct recyclr_msg_header response_header;
+    response_header.message_code = MessageCode::ack_open_connection;
+    response_header.priority = 0;
+    response_header.micro_ts = micros();
+    response_header.msg_length = 0;
+    response_header.msg_magic = MSG_MAGIC;
+
+
+    prepare_send(&response_header, sizeof(response_header), true);
+    _last_send_time = micros();
     return 0;
 }
 
