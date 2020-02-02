@@ -116,7 +116,7 @@ u32 Connection::open_connection()
     }
 
     struct recyclr_msg_header response_header;
-    response_header.message_code = MessageCode::test_op;
+    response_header.message_code = MessageCode::ack_open_connection;
     response_header.priority = 0;
     response_header.micro_ts = micros();
     response_header.msg_length = 0;
@@ -140,22 +140,33 @@ u32 Connection::handle_open_channel()
         return 0;
     }
 
-    _in_buffer.pop(&_reusable_header);
-
-    if (_reusable_header.msg_magic != MSG_MAGIC) {
+    struct recyclr_msg_header* msg = _in_buffer.peek<struct recyclr_msg_header>();
+    if (msg->msg_magic != MSG_MAGIC) {
         return -1;
     }
 
-    struct recyclr_msg_header response_header;
-    response_header.message_code = MessageCode::ack_open_connection;
-    response_header.priority = 0;
-    response_header.micro_ts = micros();
-    response_header.msg_length = 0;
-    response_header.msg_magic = MSG_MAGIC;
+    _in_buffer.pop(&_reusable_header);
 
+    if (!_reusable_header.msg_length) {
+        return 0;
+    }
 
-    prepare_send(&response_header, sizeof(response_header), true);
-    _last_send_time = micros();
+    u32 expected = _reusable_header.msg_length;
+    _state_fn = &Connection::receive_msg_payload;
+    return (this->*_state_fn)();
+}
+
+u32 Connection::receive_msg_payload()
+{
+    recv();
+    if (_in_buffer.get_size() < _reusable_header.msg_length) {
+        return 0;
+    }
+
+    char output_buffer[_reusable_header.msg_length];
+    _in_buffer.pop_buf(output_buffer, _reusable_header.msg_length);
+
+    _state_fn = &Connection::handle_open_channel;
     return 0;
 }
 

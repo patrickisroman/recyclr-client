@@ -47,6 +47,13 @@ class RingBuffer
         return dest;
     }
 
+    char* pop_buf(char* dest, size_t len)
+    {
+        if (!dest || get_size() < len) return nullptr;
+        read(dest, len);
+        return dest;
+    }
+
     size_t write(const char* buffer, size_t len);
     size_t read(char* buffer, size_t len);
     size_t read_all(char* buffer, size_t buffer_len);

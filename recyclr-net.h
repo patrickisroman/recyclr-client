@@ -55,6 +55,7 @@ class Connection {
     u32    await_handshake();
     u32    open_connection();
     u32    handle_open_channel();
+    u32    receive_msg_payload();
     u32    close();
     u32    state();
 };
