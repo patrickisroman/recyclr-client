@@ -270,7 +270,7 @@ int NetClient::handle_epoll_event(struct epoll_event& event, Connection* conn)
     }
 
     // data was unable to send on socket, now available
-    if (Event.events & EPOLLOUT) {
+    if (event.events & EPOLLOUT) {
         conn->send();
     }
 

@@ -1,7 +1,7 @@
 CXX     := g++
 CC      := gcc
 LD      := g++
-CFLAGS  := -std=gnu++17 -pthread -g -Iinclude
+CFLAGS  := -std=gnu++17 -pthread -g -Iinclude -fsanitize-address-use-after-scope
 LDFLAGS := $(CFLAGS)
 RM      := rm
 
