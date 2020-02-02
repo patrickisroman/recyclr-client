@@ -60,6 +60,8 @@ class Connection {
 
 class NetClient
 {
+    friend class Connection;
+
     protected:
     std::thread*        _thr;
     int                 _socket_fd;
@@ -67,7 +69,7 @@ class NetClient
     struct epoll_event* _epoll_events;
     bool                _running;
 
-    std::vector<Connection*> _open_connections;
+    static std::vector<Connection*> _open_connections;
 
     u32 (NetClient::*_state_fn)();
 

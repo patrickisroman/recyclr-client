@@ -9,6 +9,8 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
+std::vector<Connection*> NetClient::_open_connections = {};
+
 /////////////// Connection ////////////////
 Connection::Connection(int fd, int buffer_size) :
     _fd(fd),
@@ -159,6 +161,12 @@ u32 Connection::close()
 Connection::~Connection()
 {
     close();
+
+    auto& vec = NetClient::_open_connections;
+    auto end = std::remove_if(vec.begin(), vec.end(), [this](Connection* const &connection) {
+        return connection == this;
+    });
+    vec.erase(end, vec.end());
 }
 
 //////////////// NetClient ////////////////
