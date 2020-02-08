@@ -28,6 +28,115 @@ Connection::Connection(int fd, int buffer_size) :
     _state_fn = &Connection::await_handshake;
 }
 
+
+u32 Connection::await_handshake()
+{
+    size_t in_buffer_size = _in_buffer.get_size();
+
+    // Not enough data to read a header, execute this function again
+    if (in_buffer_size == 0 || UNLIKELY(in_buffer_size < sizeof(struct recyclr_msg_header))) {
+        return 0;
+    }
+
+    // Check header magic. Gentle reminder, peek is not threadsafe
+    struct recyclr_msg_header* header = _in_buffer.peek<struct recyclr_msg_header>();
+    if (header->msg_magic != MSG_MAGIC) {
+        _state_fn = &Connection::close;
+        return -1;
+    }
+
+    // We have a valid header. Pop and read
+    _in_buffer.pop(&_reusable_header);
+    if (_reusable_header.message_code != MessageCode::OPEN_CONNECTION) {
+        return -1;
+    }
+
+    _state_fn = &Connection::open_connection;
+    return (this->*_state_fn)();
+}
+
+u32 Connection::open_connection()
+{
+    // We expect that our handshake does not carry a payload
+    if (_reusable_header.payload_len) {
+        return 0;
+    }
+
+    _last_send_time++;
+    struct recyclr_msg_header response_header;
+    response_header.message_code = MessageCode::ACK_OPEN_CONNECTION;
+    response_header.destination = _last_send_time;
+    response_header.priority = 0;
+    response_header.micro_ts = micros();
+    response_header.payload_len = 0;
+    response_header.msg_magic = MSG_MAGIC;
+
+    prepare_send(&response_header, sizeof(response_header), true);
+
+    _state_fn = &Connection::handle_open_channel;
+    return 0;
+}
+
+size_t Connection::prepare_send(void* buffer, size_t len, bool immediate)
+{
+    size_t written = _out_buffer.write(reinterpret_cast<char*>(buffer), len);
+    return immediate ? send() : written;
+}
+
+u32 Connection::handle_open_channel()
+{
+    size_t buffer_size = _in_buffer.get_size();
+
+    if (buffer_size < sizeof(struct recyclr_msg_header)) {
+        return 0;
+    }
+
+    _in_buffer.pop(&_reusable_header);
+    if (_reusable_header.msg_magic != MSG_MAGIC) {
+        return -1;
+    }
+
+    _last_send_time = _reusable_header.destination;
+    if (_reusable_header.payload_len == 0) {
+        return 0;
+    }
+
+    _state_fn = &Connection::receive_msg_payload;
+    return (this->*_state_fn)();
+}
+
+u32 Connection::receive_msg_payload()
+{
+    recv();
+
+    if (_in_buffer.get_size() < _reusable_header.payload_len) {
+        return 0;
+    }
+
+    char output_buffer[_reusable_header.payload_len];
+    _in_buffer.pop_buf(output_buffer, _reusable_header.payload_len);
+
+    _state_fn = &Connection::send_msg;
+    return 0;
+}
+
+u32 Connection::send_msg()
+{
+    _reusable_header = {};
+    _reusable_header.message_code = MessageCode::TEST_OP;
+    _reusable_header.msg_magic = MSG_MAGIC;
+    _reusable_header.payload_len = 100;
+    _reusable_header.destination = _last_send_time + 1;
+
+    char out[sizeof(_reusable_header) + _reusable_header.payload_len];
+    memcpy(out, &_reusable_header, sizeof(_reusable_header));
+
+    prepare_send(out, sizeof(out), true);
+    
+    _state_fn = &Connection::handle_open_channel;
+    return 0;
+}
+
 size_t Connection::recv()
 {
     size_t read_length = 0;
@@ -50,10 +159,10 @@ size_t Connection::recv()
     return read_length;
 }
 
-void Connection::send()
+size_t Connection::send()
 {
     if (_out_buffer.get_size() == 0) {
-        return;
+        return 0;
     }
 
     char big_buffer[1 << 20];
@@ -65,109 +174,8 @@ void Connection::send()
         bytes_remaining -= r;
         bytes_sent += r;
     }
-}
 
-void Connection::prepare_send(void* buffer, size_t len, bool immediate)
-{
-    _out_buffer.write(reinterpret_cast<char*>(buffer), len);
-    if (immediate) {
-        send();
-    }
-}
-
-u32 Connection::await_handshake()
-{
-    size_t in_buffer_size = _in_buffer.get_size();
-
-    // no new messages. return control
-    if (!in_buffer_size) {
-        return 0;
-    }
-
-    // not enough data to read a header
-    if (UNLIKELY(in_buffer_size < sizeof(struct recyclr_msg_header))) {
-        return 0;
-    }
-
-    struct recyclr_msg_header* header = _in_buffer.peek<struct recyclr_msg_header>();
-
-    // does the magic match?
-    if (header->msg_magic != MSG_MAGIC) {
-        _state_fn = &Connection::close;
-        return 1;
-    }
-
-    header = &_reusable_header;
-    _in_buffer.pop(header);
-
-    if (header->message_code != MessageCode::open_connection) {
-        return -1;
-    }
-
-    return open_connection();
-}
-
-u32 Connection::open_connection()
-{
-    u32 msg_length = _reusable_header.msg_length;
-    // this is an invalid opening frame if msg_length > 0
-    if (_reusable_header.msg_length) {
-        return 0;
-    }
-
-    struct recyclr_msg_header response_header;
-    response_header.message_code = MessageCode::ack_open_connection;
-    response_header.priority = 0;
-    response_header.micro_ts = micros();
-    response_header.msg_length = 0;
-    response_header.msg_magic = MSG_MAGIC;
-
-    prepare_send(&response_header, sizeof(response_header), true);
-
-    _state_fn = &Connection::handle_open_channel;
-    return 0;
-}
-
-u32 Connection::handle_open_channel()
-{
-    size_t buffer_size = _in_buffer.get_size();
-    
-    if (!buffer_size) {
-        return 0;
-    }
-
-    if (buffer_size < sizeof(struct recyclr_msg_header)) {
-        return 0;
-    }
-
-    struct recyclr_msg_header* msg = _in_buffer.peek<struct recyclr_msg_header>();
-    if (msg->msg_magic != MSG_MAGIC) {
-        return -1;
-    }
-
-    _in_buffer.pop(&_reusable_header);
-
-    if (!_reusable_header.msg_length) {
-        return 0;
-    }
-
-    u32 expected = _reusable_header.msg_length;
-    _state_fn = &Connection::receive_msg_payload;
-    return (this->*_state_fn)();
-}
-
-u32 Connection::receive_msg_payload()
-{
-    recv();
-    if (_in_buffer.get_size() < _reusable_header.msg_length) {
-        return 0;
-    }
-
-    char output_buffer[_reusable_header.msg_length];
-    _in_buffer.pop_buf(output_buffer, _reusable_header.msg_length);
-
-    _state_fn = &Connection::handle_open_channel;
-    return 0;
+    return bytes_sent;
 }
 
 u32 Connection::state()
@@ -234,12 +242,10 @@ NetClient::~NetClient()
         _running = false;
         _thr->join();
         delete _thr;
-        _thr = nullptr;
     }
 
     if (_epoll_events) {
         delete _epoll_events;
-        _epoll_events = nullptr;
     }
 }
 
@@ -266,23 +272,21 @@ u32 NetClient::start()
 
 u32 NetClient::listen()
 {
+    _state_fn = &NetClient::close;
     _socket_fd = setup_listening_socket();
     if (_socket_fd < 1) {
-        _state_fn = &NetClient::close;
         return -1;
     }
 
     int r = set_socket_flags(_socket_fd, O_NONBLOCK);
     if (r < 0) {
         ERR("Unable to set socket flags. Socket: ", _socket_fd);
-        _state_fn = &NetClient::close;
         return -1;
     }
 
     _epoll_fd = epoll_create(1);
     if (_epoll_fd < 0) {
         ERR("Unable to setup epoll listener");
-        _state_fn = &NetClient::close;
         return -1;
     }
 
@@ -292,14 +296,12 @@ u32 NetClient::listen()
     r = epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, _socket_fd, &listening_socket_event);
     if (r < 0) {
         ERR("Unable to register epoll events on listening socket");
-        _state_fn = &NetClient::close;
         return -1;
     }
 
     _epoll_events = new struct epoll_event[RECYCLR_MAX_FDS];
     if (!_epoll_events) {
         ERR("Unable to allocate epoll event list");
-        _state_fn = &NetClient::close;
         return -1;
     }
 

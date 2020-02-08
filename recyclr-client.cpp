@@ -5,6 +5,7 @@
 
 #include "recyclr-client.h"
 #include "recyclr-commands.h"
+#include "recyclr-buffer-pool.h"
 
 #include "cds/init.h"
 

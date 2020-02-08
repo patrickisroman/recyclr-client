@@ -13,11 +13,9 @@ The recyclr client is the node stack of recyclr's logic. Recyclr allows for a si
 ## Run
 
     ./recyclr
-    [1579917519.193415] [recyclr-client.cpp:53] (0) Setting up Client
-    [1579917519.194615] [recyclr-client.cpp:61] (0) Client Version: 1.0
-    [1579917519.196614] [recyclr-client.cpp:74] (0) Client Local IPv4: 127.0.1.1
-    [1579917519.197371] [recyclr-client.cpp:85] (0) Num cores: 4
-    ...
-    [18446744071963319832] [1] Accepted a connection on fd 5
-    [18446744071963415932] [1] Opened a connection on fd 9
+    [LOG] [1581136621.122028] (0) [recyclr-client.cpp:44] Setting up Client
+    [LOG] [1581136621.122536] (0) [recyclr-client.cpp:52] Client Version: 1.0
+    [LOG] [1581136621.123901] (0) [recyclr-client.cpp:65] Client Local IPv4: 127.0.1.1
+    [LOG] [1581136621.123955] (0) [recyclr-client.cpp:76] Num cores: 4
+    [LOG] [1581136629.490558] (1) [recyclr-net.cpp:353] Accepted a connection from: 10.0.0.98 [fd=5]
 

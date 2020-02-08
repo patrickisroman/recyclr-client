@@ -49,14 +49,15 @@ class Connection {
     }
 
     size_t recv();
-    void   send();
-    void   prepare_send(void* buffer, size_t len, bool immediate=false);
+    size_t send();
+    size_t prepare_send(void* buffer, size_t len, bool immediate=false);
 
     u32    await_handshake();
     u32    open_connection();
     u32    handle_open_channel();
     u32    receive_msg_payload();
     u32    close();
+    u32    send_msg();
     u32    state();
 };
 
