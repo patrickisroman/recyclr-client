@@ -33,10 +33,22 @@ class RingBuffer
         return _capacity - _size;
     }
 
+
     template<typename T>
-    T* peek()
+    __attribute__((always_inline))
+    T* peek(T* dest)
     {
-        return reinterpret_cast<T*>(_ring_buffer + _start_idx);
+        if (!dest || get_size() < sizeof(T)) return nullptr;
+
+        size_t start_bytes = get_size() - _start_idx;
+        if (_end_idx < _start_idx) {
+            memcpy(dest, _ring_buffer + _start_idx, start_bytes);
+            memcpy(dest + start_bytes, _ring_buffer + start_bytes, sizeof(T) - start_bytes);
+        } else {
+            memcpy(dest, _ring_buffer + _start_idx, sizeof(T));
+        }
+
+        return dest;
     }
 
     template<typename T>

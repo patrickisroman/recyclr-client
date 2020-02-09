@@ -39,8 +39,9 @@ u32 Connection::await_handshake()
     }
 
     // Check header magic. Gentle reminder, peek is not threadsafe
-    struct recyclr_msg_header* header = _in_buffer.peek<struct recyclr_msg_header>();
-    if (header->msg_magic != MSG_MAGIC) {
+    struct recyclr_msg_header header;
+    _in_buffer.peek<struct recyclr_msg_header>(&header);
+    if (header.msg_magic != MSG_MAGIC) {
         _state_fn = &Connection::close;
         return -1;
     }
