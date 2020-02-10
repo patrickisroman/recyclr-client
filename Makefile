@@ -1,11 +1,11 @@
 CXX     := g++
 CC      := gcc
 LD      := g++
-CFLAGS  := -std=gnu++2a -pthread -g -Iinclude -fsanitize-address-use-after-scope
+CFLAGS  := -std=gnu++2a -pthread -g -Iinclude -Iconfig -fsanitize-address-use-after-scope
 LDFLAGS := $(CFLAGS)
 RM      := rm
 
-RECYCLR_SRCS  := $(wildcard *.cpp)
+RECYCLR_SRCS  := $(wildcard *.cpp) $(wildcard config/*.cpp)
 RECYCLR_OBJS  := $(RECYCLR_SRCS:%.cpp=%.o)
 RECYCLR_EXEC  := recyclr
 RECYCLR_FILES := $(RECYCLR_OBJS) $(RECYCLR_EXEC)

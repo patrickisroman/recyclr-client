@@ -20,7 +20,7 @@
             "longitude" : 1.0
         }
     ],
-    "callibrate_on_startup" : false,
+    "calibrate_on_startup" : false,
     "horizontal_communication" : {
         "enabled" : true,
         "supported_messages" : [
