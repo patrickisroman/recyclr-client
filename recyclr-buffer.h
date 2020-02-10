@@ -33,7 +33,6 @@ class RingBuffer
         return _capacity - _size;
     }
 
-
     template<typename T>
     __attribute__((always_inline))
     T* peek(T* dest)
@@ -52,9 +51,10 @@ class RingBuffer
     }
 
     template<typename T>
+    __attribute__((always_inline))
     T* pop(T* dest)
     {
-        if (!dest || get_size() < sizeof(T)) return nullptr;
+        if (!dest || _size < sizeof(T)) return nullptr;
         read(reinterpret_cast<char*>(dest), sizeof(T));
         return dest;
     }

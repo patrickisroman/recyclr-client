@@ -2,6 +2,9 @@
 
 The recyclr client is the node stack of recyclr's logic. Recyclr allows for a single server and multiple clients to communicate and coordinate their actions. The client is able to create and accept connections with the server and other clients to allow vertical and horizontal communication.
 
+## Action Board
+Visit https://trello.com/b/JPbNDBV8/recyclr to view the Recyclr action board for current in-progress tasks.
+
 ## Build
 
     # ./build.sh
@@ -12,7 +15,7 @@ The recyclr client is the node stack of recyclr's logic. Recyclr allows for a si
 
 ## Run
 
-    ./recyclr
+    # ./recyclr
     [LOG] [1581136621.122028] (0) [recyclr-client.cpp:44] Setting up Client
     [LOG] [1581136621.122536] (0) [recyclr-client.cpp:52] Client Version: 1.0
     [LOG] [1581136621.123901] (0) [recyclr-client.cpp:65] Client Local IPv4: 127.0.1.1
