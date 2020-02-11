@@ -2,11 +2,14 @@
 #include "recyclr-net.h"
 #include "recyclr-controller.h"
 #include "recyclr-image-controller.h"
+#include "config/recyclr-client-config.h"
 
 #include <string>
 
 const static u32 CLIENT_VERSION_MAJOR = 1;
 const static u32 CLIENT_VERSION_MINOR = 0;
+
+extern RecyclrClientConfig* g_config;
 
 class RecyclrClient {
     private:

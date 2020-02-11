@@ -9,6 +9,8 @@
 
 #include "cds/init.h"
 
+RecyclrClientConfig* g_config = new RecyclrClientConfig();
+
 RecyclrClient::RecyclrClient() :
     client_version_major(CLIENT_VERSION_MAJOR),
     client_version_minor(CLIENT_VERSION_MINOR),
@@ -119,6 +121,9 @@ std::string RecyclrClient::get_client_version_str()
 }
 
 int main() {
+    // Create out global config
+    RecyclrClientConfig::load_from_json(g_config);
+    
     // Pin our main thread to core 0
     set_process_affinity(BASE_THREAD_MASK);
 
