@@ -48,7 +48,7 @@ u32 Connection::await_handshake()
 
     // We have a valid header. Pop and read
     _in_buffer.pop(&_reusable_header);
-    if (_reusable_header.message_code != MessageCode::OPEN_CONNECTION) {
+    if (_reusable_header.message_code != MessageCode::MSG_CODE_OPEN_CONNECTION) {
         return -1;
     }
 
@@ -65,7 +65,7 @@ u32 Connection::open_connection()
 
     _last_send_time++;
     struct recyclr_msg_header response_header;
-    response_header.message_code = MessageCode::ACK_OPEN_CONNECTION;
+    response_header.message_code = MessageCode::MSG_CODE_ACK_OPEN_CONNECTION;
     response_header.destination = _last_send_time;
     response_header.priority = 0;
     response_header.micro_ts = micros();
@@ -124,7 +124,7 @@ u32 Connection::receive_msg_payload()
 u32 Connection::send_msg()
 {
     _reusable_header = {};
-    _reusable_header.message_code = MessageCode::TEST_OP;
+    _reusable_header.message_code = MessageCode::MSG_CODE_TEST_OP;
     _reusable_header.msg_magic = MSG_MAGIC;
     _reusable_header.payload_len = 100;
     _reusable_header.destination = _last_send_time + 1;

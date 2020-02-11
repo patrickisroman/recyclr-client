@@ -13,9 +13,12 @@ enum RecyclrTarget {
 };
 
 enum MessageCode {
-    OPEN_CONNECTION     = 1,
-    ACK_OPEN_CONNECTION = 2,
-    TEST_OP             = 3
+    MSG_CODE_TEST_OP                      = 1,
+    MSG_CODE_OPEN_CONNECTION              = 2,
+    MSG_CODE_ACK_OPEN_CONNECTION          = 3,
+    MSG_CODE_PUSH_STATE                   = 4,
+    MSG_CODE_REQUEST_TRANSMISSION_CHANNEL = 5,
+    MSG_CODE_SYNC_SERIALIZED_STREAMS      = 6
 };
 
 struct recyclr_msg_header {
